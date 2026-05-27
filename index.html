@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ops Log Generator</title>
+<style>
+  :root{
+    --bg:#f5f5f7;--card:#ffffff;--text:#1d1d1f;--muted:#6e6e73;--line:#d2d2d7;
+    --accent:#1f6feb;--accent-soft:#e8f0ff;--danger:#c62828;--ok:#137333;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  header{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:16px 22px}
+  h1{font-size:24px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px}
+  main{max-width:1380px;margin:0 auto;padding:18px;display:grid;grid-template-columns:430px 1fr;gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  h2{font-size:16px;margin:0 0 12px}
+  h3{font-size:13px;margin:18px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  select,input[type=date]{width:100%;height:38px;border:1px solid var(--line);border-radius:10px;background:white;padding:0 10px;font:inherit}
+  textarea{width:100%;min-height:220px;border:1px solid var(--line);border-radius:12px;padding:10px;font:13px/1.35 Consolas,monospace;resize:vertical}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .btns{display:flex;flex-wrap:wrap;gap:8px}
+  button{border:1px solid var(--line);background:white;border-radius:999px;padding:9px 12px;font:13px Segoe UI,Arial;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.active{background:var(--accent);border-color:var(--accent);color:white}
+  button.primary{background:var(--accent);border-color:var(--accent);color:white;font-weight:700}
+  button.danger{color:var(--danger);border-color:#ffc9c9}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:#174ea6;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:600}
+  .summary{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .status{font-size:13px;color:var(--muted);margin-top:10px}
+  .warn{color:var(--danger);font-weight:600}
+  .ok{color:var(--ok);font-weight:600}
+  .p3box{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fbfbfd;margin-top:8px}
+  .timepick{display:grid;grid-template-columns:1.2fr .8fr .8fr;gap:8px;align-items:end;margin-bottom:8px}
+  .preview-wrap{overflow:auto;background:#fff;border-radius:14px;border:1px solid var(--line);padding:12px;max-height:82vh}
+  #preview table{border-collapse:collapse;table-layout:fixed;font-family:"Segoe UI",Arial,sans-serif;font-size:11pt}
+  #preview td{border:1px solid #000;text-align:center;vertical-align:middle;padding:4px 6px;height:26px;white-space:normal;word-break:normal}
+  #preview .hdr{font-weight:700;font-size:12pt;background:#d9d9d9}
+  #preview .midnotice{color:red;font-weight:700}
+  #preview .p3{color:red;font-weight:700}
+  #preview .bold{font-weight:700}
+  #preview .job{width:384px}
+  #preview .remarks{width:115px}
+  #preview .ic{width:192px;font-weight:700}
+  #preview .no-inner{border-left:none!important;border-right:none!important;border-top:none!important;border-bottom:none!important}
+  #preview .appliance-code{text-align:right}
+  #preview .appliance-name{text-align:left}
+  .small{font-size:12px;color:var(--muted)}
+  @media(max-width:980px){main{grid-template-columns:1fr}.preview-wrap{max-height:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Ops Log Generator</h1>
+  <div class="sub">Standalone webpage version of the VBA Ops Log workflow. Generate, preview, then copy the formatted table to paste into Excel or Outlook.</div>
+</header>
+
+<main>
+<section class="card">
+  <h2>1. Shift selection</h2>
+  <div class="btns" id="modeBtns">
+    <button class="active" data-mode="auto">Auto shift</button>
+    <button data-mode="override">Override date/shift</button>
+  </div>
+
+  <div id="overridePanel" style="display:none;margin-top:12px">
+    <div class="row">
+      <div>
+        <label>Override date</label>
+        <input type="date" id="overrideDate">
+      </div>
+      <div>
+        <label>AM / PM shift</label>
+        <select id="overrideShift">
+          <option value="A">AM / Day shift</option>
+          <option value="P">PM / Night shift</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary" style="margin-top:12px" id="shiftSummary"></div>
+
+  <h2>2. IC selection</h2>
+  <h3>Current shift IC</h3>
+  <div class="btns" id="currentICBtns"></div>
+  <h3>Incoming shift IC</h3>
+  <div class="btns" id="incomingICBtns"></div>
+
+  <h2 style="margin-top:20px">3. P3 turnout</h2>
+  <div class="btns" id="p3Toggle">
+    <button class="active" data-p3="no">No P3</button>
+    <button data-p3="yes">Add P3</button>
+  </div>
+  <div id="p3Panel" class="p3box" style="display:none">
+    <label>P3 activated by</label>
+    <div class="btns" id="p3ByBtns"></div>
+    <div id="p3Times"></div>
+    <div class="small">Timing selectors only allow valid HHMM choices. Use “Exceptional early override” for the old dash override behaviour.</div>
+  </div>
+
+  <h2 style="margin-top:20px">4. REDCON email paste area</h2>
+  <label>Paste REDCON email here for Alpha Manning extraction</label>
+  <textarea id="redconText" placeholder="Paste the REDCON email here. A4xx rows will be extracted for night reports."></textarea>
+  <div class="status" id="redconStatus">No REDCON text pasted yet.</div>
+
+  <div class="btns" style="margin-top:16px">
+    <button class="primary" id="generateBtn">Generate preview</button>
+    <button class="primary" id="copyBtn">Copy table to clipboard</button>
+  </div>
+  <div class="status" id="copyStatus"></div>
+</section>
+
+<section class="card">
+  <h2>Preview</h2>
+  <div class="preview-wrap">
+    <div id="preview"></div>
+  </div>
+</section>
+</main>
+
+<script>
+const ROTA_NAMES = {
+  "Rota 1": ["LTA Rota1","SGT Rota1","CPL Rota1","LCP Rota1","PTE Rota1"],
+  "Rota 2": ["SGT Rota2","CPL Rota2","LCP Rota2","PTE Rota2"],
+  "Rota 3": ["CPL Rota3","LCP Rota3","PTE Rota3"]
+};
+
+const APPLIANCES = ["A411","A412","A413","A414","A415","A421","A431","A432","A433","A434","A435","A441","A442","A443","A444","A445","A446","A451"];
+const P3_LABELS = ["P3 Activated","P3 Left Division","P3 Arrive At Location","P3 Left Location","P3 Reach Division"];
+const state = {
+  mode:"auto", overrideDate:"", overrideShift:"A", info:null,
+  currentIC:"", incomingIC:"", hasP3:false, p3By:"",
+  p3Times: P3_LABELS.map(()=>({hh:"08",mm:"00",early:false}))
+};
+
+function pad2(n){return String(n).padStart(2,"0")}
+function ymd(d){return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`}
+function fmtDate(d){return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase()}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+function dateOnly(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate())}
+function timeNum(d){return d.getHours()*100+d.getMinutes()}
+
+function getCurrentShiftInfo(overrideDate, overrideShift){
+  const cycleStart = new Date(2026,1,17);
+  let nowDT;
+  if(overrideDate){
+    const parts = overrideDate.split("-").map(Number);
+    nowDT = new Date(parts[0],parts[1]-1,parts[2], overrideShift==="A"?9:21, 0, 0);
+  }else{
+    nowDT = new Date();
+  }
+  const tn = timeNum(nowDT);
+  const isNight = tn >= 1810 || tn < 810;
+  let shiftDate = dateOnly(nowDT);
+  if(isNight && tn < 810) shiftDate = addDays(shiftDate,-1);
+  const daysPassed = Math.floor((shiftDate - cycleStart)/86400000);
+  const cycleDay = ((daysPassed % 6)+6)%6 + 1;
+  const info = {};
+  const set=(c,i)=>{info.currentRota=c;info.incomingRota=i};
+  if(cycleDay===1) isNight ? set("Rota 2","Rota 1") : set("Rota 1","Rota 2");
+  if(cycleDay===2) isNight ? set("Rota 2","Rota 3") : set("Rota 1","Rota 2");
+  if(cycleDay===3) isNight ? set("Rota 1","Rota 3") : set("Rota 3","Rota 1");
+  if(cycleDay===4) isNight ? set("Rota 1","Rota 2") : set("Rota 3","Rota 1");
+  if(cycleDay===5) isNight ? set("Rota 3","Rota 2") : set("Rota 2","Rota 3");
+  if(cycleDay===6) isNight ? set("Rota 3","Rota 1") : set("Rota 2","Rota 3");
+  info.shiftLabel = isNight ? "Night" : "Day";
+  info.shiftStartDate = shiftDate;
+  info.shiftEndDate = isNight ? addDays(shiftDate,1) : shiftDate;
+  info.cycleDay = cycleDay;
+  return info;
+}
+
+function refreshShift(){
+  state.overrideDate = document.getElementById("overrideDate").value;
+  state.overrideShift = document.getElementById("overrideShift").value;
+  state.info = getCurrentShiftInfo(state.mode==="override" ? state.overrideDate : "", state.overrideShift);
+  if(!state.currentIC || !ROTA_NAMES[state.info.currentRota].includes(state.currentIC)) state.currentIC = ROTA_NAMES[state.info.currentRota][0];
+  if(!state.incomingIC || !ROTA_NAMES[state.info.incomingRota].includes(state.incomingIC)) state.incomingIC = ROTA_NAMES[state.info.incomingRota][0];
+  if(!state.p3By) state.p3By = state.currentIC;
+  renderShiftSummary(); renderICButtons(); renderP3();
+}
+
+function renderShiftSummary(){
+  const s = document.getElementById("shiftSummary");
+  const i = state.info;
+  s.innerHTML = `
+    <span class="pill">${i.shiftLabel} report</span>
+    <span class="pill">${i.currentRota} → ${i.incomingRota}</span>
+    <span class="pill">${fmtDate(i.shiftStartDate)}${i.shiftLabel==="Night" ? " → "+fmtDate(i.shiftEndDate):""}</span>
+    <span class="pill">Cycle day ${i.cycleDay}</span>`;
+}
+
+function btn(label, active, fn){
+  const b = document.createElement("button"); b.textContent = label; if(active) b.classList.add("active"); b.onclick=fn; return b;
+}
+
+function renderICButtons(){
+  const cur = document.getElementById("currentICBtns"); cur.innerHTML="";
+  ROTA_NAMES[state.info.currentRota].forEach(n=>cur.appendChild(btn(n,state.currentIC===n,()=>{state.currentIC=n; if(!state.p3By) state.p3By=n; renderICButtons(); renderP3(); generatePreview();})));
+  const inc = document.getElementById("incomingICBtns"); inc.innerHTML="";
+  ROTA_NAMES[state.info.incomingRota].forEach(n=>inc.appendChild(btn(n,state.incomingIC===n,()=>{state.incomingIC=n; renderICButtons(); generatePreview();})));
+}
+
+function renderP3(){
+  const panel = document.getElementById("p3Panel"); panel.style.display = state.hasP3 ? "block":"none";
+  const by = document.getElementById("p3ByBtns"); by.innerHTML="";
+  [...ROTA_NAMES[state.info.currentRota],...ROTA_NAMES[state.info.incomingRota],"UNKNOWN"].forEach(n=>by.appendChild(btn(n,state.p3By===n,()=>{state.p3By=n; renderP3(); generatePreview();})));
+  const container = document.getElementById("p3Times"); container.innerHTML="";
+  P3_LABELS.forEach((label,idx)=>{
+    const row = document.createElement("div"); row.className="timepick";
+    const lab = document.createElement("div"); lab.innerHTML = `<label>${idx+1}. ${label}</label>`;
+    const hh = document.createElement("select"); const mm = document.createElement("select");
+    for(let h=0; h<24; h++){const o=new Option(pad2(h),pad2(h)); hh.add(o)}
+    for(let m=0; m<60; m++){const o=new Option(pad2(m),pad2(m)); mm.add(o)}
+    hh.value=state.p3Times[idx].hh; mm.value=state.p3Times[idx].mm;
+    hh.onchange=()=>{state.p3Times[idx].hh=hh.value; generatePreview()};
+    mm.onchange=()=>{state.p3Times[idx].mm=mm.value; generatePreview()};
+    const early = document.createElement("button");
+    early.textContent = state.p3Times[idx].early ? "Early override ON" : "Normal timing";
+    if(state.p3Times[idx].early) early.classList.add("active");
+    early.onclick=()=>{state.p3Times[idx].early=!state.p3Times[idx].early; renderP3(); generatePreview()};
+    lab.appendChild(early);
+    row.append(lab,hh,mm); container.appendChild(row);
+  });
+}
+
+function timeStr(t){return `${t.hh}${t.mm}`}
+function timeOrder(t, shift){
+  if(!t) return shift==="Night" ? 2100 : 0;
+  const n = Number(t);
+  if(shift==="Night" && n <= 810) return n + 2400;
+  return n;
+}
+
+function validateP3(){
+  if(!state.hasP3) return [];
+  const errs=[]; let prev = 0;
+  state.p3Times.forEach((t,i)=>{
+    const actual = Number(timeStr(t)); const hh=Number(t.hh), mm=Number(t.mm);
+    if(hh>23 || mm>59) errs.push(`${P3_LABELS[i]} is invalid.`);
+    if(state.info.shiftLabel==="Day"){
+      if(t.early){ if(actual>=800) errs.push(`${P3_LABELS[i]} early override is only for timings before 0800.`); }
+      else { if(actual<800 || actual>1800) errs.push(`${P3_LABELS[i]} must be 0800–1800 unless early override is used.`); }
+    }else{
+      if(t.early){ if(actual>=1800 || actual<=800) errs.push(`${P3_LABELS[i]} early override is only for exceptional timings before 1800.`); }
+      else { if(actual>800 && actual<1800) errs.push(`${P3_LABELS[i]} must be 1800–0800 unless early override is used.`); }
+    }
+    const ord = timeOrder(timeStr(t), state.info.shiftLabel);
+    if(ord <= prev) errs.push(`${P3_LABELS[i]} must be later than the previous P3 timing.`);
+    prev = ord;
+  });
+  return errs;
+}
+
+function parseRedcon(text){
+  const lines = text.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n").map(x=>x.trim());
+  const out = {};
+  for(let i=0;i<lines.length;i++){
+    const code = lines[i].toUpperCase();
+    if(/^A4\d{2}$/.test(code)){
+      let j=i+1, vals=[];
+      while(j<lines.length && vals.length<2){ if(lines[j]) vals.push(lines[j]); j++; }
+      out[code]={rank:vals[0]||"", name:vals[1]||""};
+    }
+  }
+  return out;
+}
+
+function addRow(rows,t,l1,l2,l3,job,rt,remarks,isP3=false,isAppliance=false){
+  rows.push({t,l1,l2,l3,job,rt,remarks,isP3,isAppliance});
+}
+function addP3Rows(rows){
+  if(!state.hasP3) return;
+  const times = state.p3Times.map(timeStr);
+  addRow(rows,times[0],"-","-","-","P3 Activated by "+state.p3By.toUpperCase(),times[0],"All in order.",true,false);
+  addRow(rows,times[1],"-","-","-","P3 Left Division",times[1],"All in order.",true,false);
+  addRow(rows,times[2],"-","-","-","P3 Arrive At Location",times[2],"All in order.",true,false);
+  addRow(rows,times[3],"-","-","-","P3 Left Location",times[3],"All in order.",true,false);
+  addRow(rows,times[4],"-","-","-","P3 Reach Division",times[4],"All in order.",true,false);
+}
+function nightRank(r){
+  const j=r.job.toUpperCase().trim();
+  if(j==="CHECKING OF STATION ALPHAS") return 10;
+  if(j==="CHECK AND UPDATED APPLIANCES OIC -") return 20;
+  if(r.isAppliance || j.startsWith("A4")) return 30;
+  if(j==="CHECK AND UPDATED APPLIANCES OIC") return 40;
+  return 50;
+}
+function sortRows(rows,shift){
+  rows.sort((a,b)=>{
+    const oa=timeOrder(a.t,shift), ob=timeOrder(b.t,shift);
+    if(oa!==ob) return oa-ob;
+    if(shift==="Night" && oa===2100) return nightRank(a)-nightRank(b);
+    return 0;
+  });
+}
+
+function buildRows(){
+  const rows=[]; const i=state.info;
+  if(i.shiftLabel==="Day"){
+    [["0800","@Terminal"],["0830","@Terminal"],["0930","FCV CHECK"],["1000","@Terminal","CCTV"],["1030","FP AUDIT"],["1100","@Terminal"],["1200","@Terminal"],["1300","Checking of Key Press"],["1330","Updating of Reports"],["1430","FP AUDIT"],["1500","@Terminal","CCTV"],["1600","Checking of Directives"]]
+    .forEach(x=>addRow(rows,x[0],"-","-",x[2]||"-",x[1],x[0],"All in order."));
+    addP3Rows(rows);
+    addRow(rows,"1755",i.incomingRota,i.currentRota,"PERS",state.incomingIC.toUpperCase()+" TAKING OVER "+state.currentIC.toUpperCase(),"1755","All in order.");
+  }else{
+    [["1800","Maintaining cleanliness of RDR"],["1900","Checking of key press"],["2000","FP AUDIT"],["2100","Checking of station Alphas"],["2100","Check and Updated Appliances OIC -"]]
+    .forEach(x=>addRow(rows,x[0],"-","-","-",x[1],x[0],"All in order."));
+    APPLIANCES.forEach(a=>addRow(rows,"","-","-","-",a+" –","","All in order.",false,true));
+    [["2100","Check and Updated Appliances OIC"],["2200","Checking of iDen & Batteries"],["2300","Checking of iDen & Batteries"],["2359","Maintaining cleanliness of RDR"],["0000","@Terminal"],["0110","@Terminal"],["0150","FP AUDIT","CCTV"],["0155","@Terminal"],["0200","@Terminal"],["0300","@Terminal"],["0316","@Terminal"],["0500","@Terminal"],["0512","@Terminal"],["0600","Checking of RDR Equipments"],["0625","@Terminal"],["0700","Fire and Rescue Statistics & FP Audit"]]
+    .forEach(x=>addRow(rows,x[0],"-","-",x[2]||"-",x[1],x[0],"All in order."));
+    addP3Rows(rows);
+    addRow(rows,"0758",i.incomingRota,i.currentRota,"-",state.incomingIC.toUpperCase()+" TAKING OVER "+state.currentIC.toUpperCase(),"0758","All in order.");
+  }
+  sortRows(rows,i.shiftLabel);
+  return rows;
+}
+
+function td(txt, cls="", attrs=""){
+  return `<td ${attrs} class="${cls}">${String(txt??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</td>`;
+}
+const colgroup = `<colgroup>${[64,64,64,64,64,128,96,160,64,115,192].map(w=>`<col style="width:${w}px">`).join("")}</colgroup>`;
+function standardRowHtml(sn,r,redcon){
+  if(r.isAppliance){
+    const code=r.job.split(/[–-]/)[0].trim();
+    const found=redcon[code]||{rank:"",name:""};
+    return `<tr>${td(sn)}${td("")}${td("-")}${td("-")}${td("-")}${td(code+" –","appliance-code")}${td(found.rank)}${td(found.name,"appliance-name")}${td("")}${td("All in order.")}${td("")}</tr>`;
+  }
+  const jobCls = (r.isP3 ? "p3 " : "") + (r.job.toUpperCase().includes("TAKING OVER") ? "bold " : "");
+  return `<tr>${td(sn)}${td(r.t)}${td(r.l1)}${td(r.l2)}${td(r.l3)}${td(r.job,jobCls,`colspan="3"`)}${td(r.rt)}${td(r.remarks)}${td("")}</tr>`;
+}
+function hotoRows(startSN,timing,isDay){
+  const i=state.info;
+  const items = [
+    state.incomingIC.toUpperCase()+" TAKING OVER "+state.currentIC.toUpperCase(),
+    "HOTO comprises of",
+    "1. FCV Equipment",
+    "2. Physical Recall Kit - 9 Nominal Roll, DO, ADO, RDR, ARMS II Guide, 15 pens, 5 Markers.",
+    "3. Comms Equipment - As per list in infocomms equipment HOTO.",
+    "4. Files and Directives - List of the files are at the Cabinet 1 and 2. *(HRI 70 Files and Ops Directive)",
+    "5. Keypress - Keypress Book"
+  ];
+  return items.map((text,idx)=>`<tr>${
+    idx===0 ? td(startSN,"",`rowspan="7"`)+td(timing,"",`rowspan="7"`)+td(i.currentRota,"",`rowspan="7"`)+td(i.incomingRota,"",`rowspan="7"`)+td("PERS","",`rowspan="7"`) : ""
+  }${td(text,idx===0?"bold":"",`colspan="3"`)}${
+    idx===0 ? td(timing,"",`rowspan="7"`)+td("All in order.","",`rowspan="7"`)+td(state.incomingIC,"ic",`rowspan="7"`) : ""
+  }</tr>`).join("");
+}
+
+function buildTableHtml(){
+  const errors = validateP3();
+  if(errors.length){
+    document.getElementById("copyStatus").innerHTML = `<span class="warn">${errors[0]}</span>`;
+  } else document.getElementById("copyStatus").textContent = "";
+  const redcon = parseRedcon(document.getElementById("redconText").value);
+  const count = Object.keys(redcon).length;
+  document.getElementById("redconStatus").innerHTML = count ? `<span class="ok">${count} appliance row(s) detected.</span>` : `No A4xx alpha manning rows detected.`;
+  const rows = buildRows(); const i=state.info; let html = `<table>${colgroup}<tbody>`;
+  html += `<tr>${td("Taken over by "+i.currentRota,"hdr",`colspan="11"`)}</tr>`;
+  if(i.shiftLabel==="Day"){
+    rows.forEach((r,idx)=>{ html += standardRowHtml(idx+1,r,redcon); });
+    html += hotoRows(rows.length+1,"1800",true);
+    html += `<tr>${td("Taken over by "+i.incomingRota,"hdr",`colspan="11"`)}</tr>`;
+  }else{
+    const after2359Index = rows.reduce((last,r,idx)=> r.t && timeOrder(r.t,"Night")<=2359 ? idx : last, -1);
+    let snBefore=15, snAfter=1;
+    rows.forEach((r,idx)=>{
+      if(idx===after2359Index+1){
+        html += `<tr>${td("CLOSED PAGE ON "+fmtDate(i.shiftStartDate),"midnotice",`colspan="11"`)}</tr>`;
+        html += `<tr>${td("Certified by CPT HADIZUL   All in order","midnotice",`colspan="11"`)}</tr>`;
+        html += `<tr>${td("OPENED PAGE ON "+fmtDate(i.shiftEndDate),"midnotice",`colspan="11"`)}</tr>`;
+      }
+      const sn = idx<=after2359Index ? snBefore++ : snAfter++;
+      html += standardRowHtml(sn,r,redcon);
+    });
+    html += hotoRows(snAfter,"0800",false);
+    html += `<tr>${td("Taken over by "+i.incomingRota,"hdr",`colspan="11"`)}</tr>`;
+  }
+  html += `</tbody></table>`;
+  return html;
+}
+
+function generatePreview(){
+  refreshShiftSummaryOnly();
+  document.getElementById("preview").innerHTML = buildTableHtml();
+}
+function refreshShiftSummaryOnly(){
+  state.overrideDate = document.getElementById("overrideDate").value;
+  state.overrideShift = document.getElementById("overrideShift").value;
+  state.info = getCurrentShiftInfo(state.mode==="override" ? state.overrideDate : "", state.overrideShift);
+  renderShiftSummary();
+}
+
+async function copyTable(){
+  const errors = validateP3();
+  if(errors.length){ document.getElementById("copyStatus").innerHTML=`<span class="warn">${errors[0]}</span>`; return; }
+  const html = document.getElementById("preview").innerHTML || buildTableHtml();
+  const full = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${html}</body></html>`;
+  try{
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/html": new Blob([full], {type:"text/html"}),
+        "text/plain": new Blob([document.getElementById("preview").innerText], {type:"text/plain"})
+      })
+    ]);
+    document.getElementById("copyStatus").innerHTML = `<span class="ok">Copied formatted table. Paste into Excel or Outlook.</span>`;
+  }catch(e){
+    const range=document.createRange(); range.selectNode(document.querySelector("#preview table"));
+    const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    const ok=document.execCommand("copy");
+    sel.removeAllRanges();
+    document.getElementById("copyStatus").innerHTML = ok ? `<span class="ok">Copied using fallback method.</span>` : `<span class="warn">Clipboard blocked by browser. Select the preview table and press Ctrl/Cmd+C.</span>`;
+  }
+}
+
+document.querySelectorAll("#modeBtns button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("#modeBtns button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active"); state.mode=b.dataset.mode;
+  document.getElementById("overridePanel").style.display = state.mode==="override" ? "block":"none";
+  refreshShift(); generatePreview();
+});
+document.querySelectorAll("#p3Toggle button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("#p3Toggle button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active"); state.hasP3 = b.dataset.p3==="yes"; renderP3(); generatePreview();
+});
+document.getElementById("overrideDate").value = ymd(new Date());
+document.getElementById("overrideDate").onchange=()=>{refreshShift(); generatePreview()};
+document.getElementById("overrideShift").onchange=()=>{refreshShift(); generatePreview()};
+document.getElementById("redconText").oninput=()=>generatePreview();
+document.getElementById("generateBtn").onclick=()=>generatePreview();
+document.getElementById("copyBtn").onclick=copyTable;
+
+refreshShift();
+generatePreview();
+</script>
+</body>
+</html>

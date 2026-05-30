@@ -6,10 +6,22 @@
 const ROTAS_KEY      = 'opslog_rotas_v1';
 const APPLIANCES_KEY = 'opslog_appliances_v1';
 
+const ROTAS_TS_KEY      = 'opslog_rotas_ts_v1';
+const APPLIANCES_TS_KEY = 'opslog_appliances_ts_v1';
+
 function loadRotasFromStorage()      { try { return JSON.parse(localStorage.getItem(ROTAS_KEY))      || []; } catch { return []; } }
-function saveRotasToStorage()        { localStorage.setItem(ROTAS_KEY,      JSON.stringify(S.rotas));      }
+function saveRotasToStorage()        { localStorage.setItem(ROTAS_KEY, JSON.stringify(S.rotas)); localStorage.setItem(ROTAS_TS_KEY, String(Date.now())); }
 function loadAppliancesFromStorage() { try { return JSON.parse(localStorage.getItem(APPLIANCES_KEY)) || []; } catch { return []; } }
-function saveAppliancesToStorage()   { localStorage.setItem(APPLIANCES_KEY, JSON.stringify(S.appliances)); }
+function saveAppliancesToStorage()   { localStorage.setItem(APPLIANCES_KEY, JSON.stringify(S.appliances)); localStorage.setItem(APPLIANCES_TS_KEY, String(Date.now())); }
+
+function timeAgo(ts) {
+  if (!ts) return 'never';
+  const d = Math.floor((Date.now() - Number(ts)) / 1000);
+  if (d < 60)  return 'just now';
+  if (d < 3600) return `${Math.floor(d/60)}m ago`;
+  if (d < 86400) return `${Math.floor(d/3600)}h ago`;
+  return `${Math.floor(d/86400)}d ago`;
+}
 
 function rebuildRotaPeopleDB() {
   saveRotaPeopleDB({nextId:1, people:[]});
@@ -67,14 +79,16 @@ function renderRotaSettingsList() {
     `<button class="settings-tab rota-tab-${rotaNum(r)}${r===tab?' active':''}" onclick="setRotaTab('${r}')">${r}</button>`
   ).join('');
   const filtered = S.rotas.map((r,i)=>({...r,i})).filter(r=>r.rota===tab);
+  const ts = timeAgo(localStorage.getItem(ROTAS_TS_KEY));
   let listHTML;
   if (!filtered.length) {
     listHTML = `<div class="settings-empty-hint">No entries for ${tab} — add one below.</div>`;
   } else {
     const cls = {'Rota 1':'re-r1','Rota 2':'re-r2','Rota 3':'re-r3'};
     listHTML = filtered.map(({rota,rank,name,i}) => {
+      const rn = rotaNum(rota);
       if (S.settingsEditIdx === i) {
-        return `<div class="rota-entry-row">
+        return `<div class="rota-entry-row" data-rota="${rn}">
           <span class="rota-entry-badge ${cls[rota]||''}">${rota}</span>
           <input class="text-input settings-sm" id="edit-rank-${i}" value="${esc(rank)}" placeholder="Rank">
           <input class="text-input settings-sm" id="edit-name-${i}" value="${esc(name)}" placeholder="Name"
@@ -83,7 +97,7 @@ function renderRotaSettingsList() {
           <button class="entry-remove-btn" onclick="cancelRotaEntryEdit()" title="Cancel">✕</button>
         </div>`;
       }
-      return `<div class="rota-entry-row">
+      return `<div class="rota-entry-row" data-rota="${rn}">
         <span class="rota-entry-badge ${cls[rota]||''}">${rota}</span>
         <span class="rota-entry-rank">${esc(rank)||'—'}</span>
         <span class="rota-entry-name">${esc(name)}</span>
@@ -92,7 +106,9 @@ function renderRotaSettingsList() {
       </div>`;
     }).join('');
   }
-  wrap.innerHTML = `<div class="settings-tabs">${tabsHTML}</div><div class="rota-entries-body">${listHTML}</div>`;
+  wrap.innerHTML = `<div class="settings-tabs">${tabsHTML}</div>
+    <div class="rota-entries-body">${listHTML}</div>
+    <div style="margin-top:4px"><span class="settings-ts">Last changed: ${ts}</span></div>`;
 }
 
 function editRotaEntry(idx){
@@ -144,6 +160,7 @@ function renderApplianceSettingsList() {
     const n=stn.replace('STN','');
     return `<button class="settings-tab stn-tab-${n}${stn===tab?' active':''}" onclick="setStnTab('${stn}')">${stn}</button>`;
   }).join('');
+  const ts = timeAgo(localStorage.getItem(APPLIANCES_TS_KEY));
   const filtered = tab ? S.appliances.map((a,i)=>({...a,i})).filter(a=>getStnFromCode(a.code)===tab) : S.appliances.map((a,i)=>({...a,i}));
   const listHTML = filtered.length
     ? filtered.map(({code,i}) => `
@@ -152,7 +169,9 @@ function renderApplianceSettingsList() {
           <button class="entry-remove-btn" onclick="removeAppliance(${i})" title="Remove">✕</button>
         </div>`).join('')
     : `<div class="settings-empty-hint">No appliances for ${tab}.</div>`;
-  wrap.innerHTML = `<div class="settings-tabs">${tabsHTML}</div><div class="appliance-entries-body" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${listHTML}</div>`;
+  wrap.innerHTML = `<div class="settings-tabs">${tabsHTML}</div>
+    <div class="appliance-entries-body">${listHTML}</div>
+    <div style="margin-top:4px"><span class="settings-ts">Last changed: ${ts}</span></div>`;
 }
 
 // =============================================
@@ -268,7 +287,7 @@ function computeShift(refDate) {
 }
 function applyShiftResult(r) {
   S.detectedShiftLabel = r.shiftLabel; S.currentRota = r.currentRota; S.incomingRota = r.incomingRota;
-  const icon = r.shiftLabel === 'Day' ? '☀' : '🌙';
+  const icon = r.shiftLabel === 'Day' ? '☀️' : '🌙';
   const badge = el('shift-badge');
   badge.textContent = r.currentRota + ' ' + icon;
   badge.className = 'shift-badge rota-badge-' + rotaNum(r.currentRota);

@@ -1054,23 +1054,28 @@ h1 {
 }
 
 /* Rota entries list */
-.rota-entries-list {
+.rota-entries-list { margin-top: 6px; }
+.rota-entries-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 240px;
+  gap: 6px;
+  max-height: 220px;
   overflow-y: auto;
-  margin-top: 6px;
+  padding: 2px 1px;
+  margin-top: 4px;
 }
 .rota-entry-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 8px;
+  padding: 7px 10px;
   border-radius: 8px;
-  background: var(--surface-2);
+  border: 1px solid transparent;
   font-size: 13px;
 }
+.rota-entry-row[data-rota="1"] { background: var(--rota-1-bg); border-color: color-mix(in srgb,var(--rota-1) 25%,transparent); }
+.rota-entry-row[data-rota="2"] { background: var(--rota-2-bg); border-color: color-mix(in srgb,var(--rota-2) 25%,transparent); }
+.rota-entry-row[data-rota="3"] { background: var(--rota-3-bg); border-color: color-mix(in srgb,var(--rota-3) 25%,transparent); }
 .rota-entry-badge {
   font-size: 10px;
   font-weight: 700;
@@ -1080,47 +1085,65 @@ h1 {
   flex-shrink: 0;
   text-transform: uppercase;
 }
-.re-r1 { background: var(--rota-1-bg); color: var(--rota-1); }
-.re-r2 { background: var(--rota-2-bg); color: var(--rota-2); }
-.re-r3 { background: var(--rota-3-bg); color: var(--rota-3); }
+.re-r1 { background: color-mix(in srgb,var(--rota-1) 20%,transparent); color: var(--rota-1); }
+.re-r2 { background: color-mix(in srgb,var(--rota-2) 20%,transparent); color: var(--rota-2); }
+.re-r3 { background: color-mix(in srgb,var(--rota-3) 20%,transparent); color: var(--rota-3); }
+.rota-entry-rank { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; min-width: 36px; }
+.rota-entry-name { flex: 1; font-weight: 500; color: var(--text); }
 
-/* IC section — tinted by current/incoming rota */
+/* IC section — full rota colour tint */
 #section-current-ic[data-rota="1"],
-#section-incoming-ic[data-rota="1"] { border-top: 3px solid var(--rota-1); }
+#section-incoming-ic[data-rota="1"] { background: var(--rota-1-bg); border-top: 3px solid var(--rota-1); }
 #section-current-ic[data-rota="2"],
-#section-incoming-ic[data-rota="2"] { border-top: 3px solid var(--rota-2); }
+#section-incoming-ic[data-rota="2"] { background: var(--rota-2-bg); border-top: 3px solid var(--rota-2); }
 #section-current-ic[data-rota="3"],
-#section-incoming-ic[data-rota="3"] { border-top: 3px solid var(--rota-3); }
+#section-incoming-ic[data-rota="3"] { background: var(--rota-3-bg); border-top: 3px solid var(--rota-3); }
 #section-current-ic[data-rota="1"] .section-head h2,
 #section-incoming-ic[data-rota="1"] .section-head h2 { color: var(--rota-1); }
 #section-current-ic[data-rota="2"] .section-head h2,
 #section-incoming-ic[data-rota="2"] .section-head h2 { color: var(--rota-2); }
 #section-current-ic[data-rota="3"] .section-head h2,
 #section-incoming-ic[data-rota="3"] .section-head h2 { color: var(--rota-3); }
-.rota-entry-rank { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; min-width: 36px; }
-.rota-entry-name { flex: 1; font-weight: 500; color: var(--text); }
 
 /* Appliance entries list */
-.appliance-settings-list {
+.appliance-settings-list { margin-top: 6px; }
+.appliance-entries-body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 2px 1px;
+  margin-top: 4px;
 }
 .appliance-entry-row {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 3px 4px 3px 10px;
+  padding: 4px 5px 4px 10px;
+  background: var(--surface-2);
 }
+.appliance-entry-row.stn-41 { background: color-mix(in srgb,var(--stn-41) 10%,var(--surface)); border-color: color-mix(in srgb,var(--stn-41) 30%,transparent); }
+.appliance-entry-row.stn-42 { background: color-mix(in srgb,var(--stn-42) 10%,var(--surface)); border-color: color-mix(in srgb,var(--stn-42) 30%,transparent); }
+.appliance-entry-row.stn-43 { background: color-mix(in srgb,var(--stn-43) 10%,var(--surface)); border-color: color-mix(in srgb,var(--stn-43) 30%,transparent); }
+.appliance-entry-row.stn-44 { background: color-mix(in srgb,var(--stn-44) 10%,var(--surface)); border-color: color-mix(in srgb,var(--stn-44) 30%,transparent); }
+.appliance-entry-row.stn-45 { background: color-mix(in srgb,var(--stn-45) 10%,var(--surface)); border-color: color-mix(in srgb,var(--stn-45) 30%,transparent); }
 .appliance-code-tag {
   font-size: 12px;
   font-weight: 700;
   font-family: monospace;
   color: var(--text);
+}
+
+/* Last-changed timestamp */
+.settings-ts {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 400;
+  font-style: italic;
+  margin-left: 6px;
 }
 
 /* Shared remove button */
@@ -1199,42 +1222,45 @@ h1 {
    ============================================= */
 .settings-tabs {
   display: flex;
-  flex-wrap: wrap;
   gap: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 2px;
 }
 .settings-tab {
-  padding: 5px 14px;
+  flex: 1;
+  text-align: center;
+  padding: 7px 4px;
   border: 1.5px solid var(--border);
-  border-radius: 20px;
-  background: var(--surface);
-  color: var(--text-2);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-3);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.settings-tab:hover { border-color: currentColor; }
 
 /* Rota tabs */
-.settings-tab.rota-tab-1       { color: var(--rota-1); }
-.settings-tab.rota-tab-1.active{ background: var(--rota-1-bg); border-color: var(--rota-1); }
-.settings-tab.rota-tab-2       { color: var(--rota-2); }
-.settings-tab.rota-tab-2.active{ background: var(--rota-2-bg); border-color: var(--rota-2); }
-.settings-tab.rota-tab-3       { color: var(--rota-3); }
-.settings-tab.rota-tab-3.active{ background: var(--rota-3-bg); border-color: var(--rota-3); }
+.settings-tab.rota-tab-1:hover        { color: var(--rota-1); border-color: var(--rota-1); }
+.settings-tab.rota-tab-1.active       { background: var(--rota-1-bg); border-color: var(--rota-1); color: var(--rota-1); font-weight: 700; }
+.settings-tab.rota-tab-2:hover        { color: var(--rota-2); border-color: var(--rota-2); }
+.settings-tab.rota-tab-2.active       { background: var(--rota-2-bg); border-color: var(--rota-2); color: var(--rota-2); font-weight: 700; }
+.settings-tab.rota-tab-3:hover        { color: var(--rota-3); border-color: var(--rota-3); }
+.settings-tab.rota-tab-3.active       { background: var(--rota-3-bg); border-color: var(--rota-3); color: var(--rota-3); font-weight: 700; }
 
 /* STN tabs */
-.settings-tab.stn-tab-41       { color: var(--stn-41); }
-.settings-tab.stn-tab-41.active{ background: color-mix(in srgb,var(--stn-41) 12%,var(--surface)); border-color: var(--stn-41); }
-.settings-tab.stn-tab-42       { color: var(--stn-42); }
-.settings-tab.stn-tab-42.active{ background: color-mix(in srgb,var(--stn-42) 12%,var(--surface)); border-color: var(--stn-42); }
-.settings-tab.stn-tab-43       { color: var(--stn-43); }
-.settings-tab.stn-tab-43.active{ background: color-mix(in srgb,var(--stn-43) 12%,var(--surface)); border-color: var(--stn-43); }
-.settings-tab.stn-tab-44       { color: var(--stn-44); }
-.settings-tab.stn-tab-44.active{ background: color-mix(in srgb,var(--stn-44) 12%,var(--surface)); border-color: var(--stn-44); }
-.settings-tab.stn-tab-45       { color: var(--stn-45); }
-.settings-tab.stn-tab-45.active{ background: color-mix(in srgb,var(--stn-45) 12%,var(--surface)); border-color: var(--stn-45); }
+.settings-tab.stn-tab-41:hover        { color: var(--stn-41); border-color: var(--stn-41); }
+.settings-tab.stn-tab-41.active       { background: color-mix(in srgb,var(--stn-41) 12%,var(--surface)); border-color: var(--stn-41); color: var(--stn-41); font-weight: 700; }
+.settings-tab.stn-tab-42:hover        { color: var(--stn-42); border-color: var(--stn-42); }
+.settings-tab.stn-tab-42.active       { background: color-mix(in srgb,var(--stn-42) 12%,var(--surface)); border-color: var(--stn-42); color: var(--stn-42); font-weight: 700; }
+.settings-tab.stn-tab-43:hover        { color: var(--stn-43); border-color: var(--stn-43); }
+.settings-tab.stn-tab-43.active       { background: color-mix(in srgb,var(--stn-43) 12%,var(--surface)); border-color: var(--stn-43); color: var(--stn-43); font-weight: 700; }
+.settings-tab.stn-tab-44:hover        { color: var(--stn-44); border-color: var(--stn-44); }
+.settings-tab.stn-tab-44.active       { background: color-mix(in srgb,var(--stn-44) 12%,var(--surface)); border-color: var(--stn-44); color: var(--stn-44); font-weight: 700; }
+.settings-tab.stn-tab-45:hover        { color: var(--stn-45); border-color: var(--stn-45); }
+.settings-tab.stn-tab-45.active       { background: color-mix(in srgb,var(--stn-45) 12%,var(--surface)); border-color: var(--stn-45); color: var(--stn-45); font-weight: 700; }
 
 .settings-empty-hint {
   font-size: 13px;
@@ -1256,12 +1282,12 @@ h1 {
 }
 .entry-edit-btn:hover { background: color-mix(in srgb,var(--accent) 12%,var(--surface)); color: var(--accent); }
 
-/* Appliance entry STN colour dot */
-.appliance-entry-row.stn-41 .appliance-code-tag { color: var(--stn-41); }
-.appliance-entry-row.stn-42 .appliance-code-tag { color: var(--stn-42); }
-.appliance-entry-row.stn-43 .appliance-code-tag { color: var(--stn-43); }
-.appliance-entry-row.stn-44 .appliance-code-tag { color: var(--stn-44); }
-.appliance-entry-row.stn-45 .appliance-code-tag { color: var(--stn-45); }
+/* Appliance callsign colour follows STN */
+.appliance-entry-row.stn-41 .appliance-code-tag { color: var(--stn-41); font-weight: 800; }
+.appliance-entry-row.stn-42 .appliance-code-tag { color: var(--stn-42); font-weight: 800; }
+.appliance-entry-row.stn-43 .appliance-code-tag { color: var(--stn-43); font-weight: 800; }
+.appliance-entry-row.stn-44 .appliance-code-tag { color: var(--stn-44); font-weight: 800; }
+.appliance-entry-row.stn-45 .appliance-code-tag { color: var(--stn-45); font-weight: 800; }
 
 /* =============================================
    REDCON TABLE — STN colour coding

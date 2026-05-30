@@ -1,18 +1,104 @@
 'use strict';
 
 // =============================================
-// CONFIG
+// ROTAS & APPLIANCES — localStorage management
 // =============================================
-const CFG_KEY = 'opslog_config_v2';
-function loadConfig() {
-  try { return JSON.parse(localStorage.getItem(CFG_KEY)) || {}; } catch { return {}; }
+const ROTAS_KEY      = 'opslog_rotas_v1';
+const APPLIANCES_KEY = 'opslog_appliances_v1';
+
+function loadRotasFromStorage()      { try { return JSON.parse(localStorage.getItem(ROTAS_KEY))      || []; } catch { return []; } }
+function saveRotasToStorage()        { localStorage.setItem(ROTAS_KEY,      JSON.stringify(S.rotas));      }
+function loadAppliancesFromStorage() { try { return JSON.parse(localStorage.getItem(APPLIANCES_KEY)) || []; } catch { return []; } }
+function saveAppliancesToStorage()   { localStorage.setItem(APPLIANCES_KEY, JSON.stringify(S.appliances)); }
+
+function rebuildRotaPeopleDB() {
+  saveRotaPeopleDB({nextId:1, people:[]});
+  S.rotas.forEach(p => findOrAddRotaPerson(p.rota, p.rank, p.name));
+  S.currentRotaPersonId = null;
+  S.incomingRotaPersonId = null;
+  renderICButtons();
+  updateValidation();
 }
-function saveConfig() {
-  const cfg = {
-    rotasPath:      el('cfg-rotas-path').value.trim()      || 'rotas.csv',
-    appliancesPath: el('cfg-appliances-path').value.trim() || 'appliances.csv',
-  };
-  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+
+// ---- IC entry CRUD ----
+function addRotaEntryFromUI() {
+  const rota = el('new-entry-rota').value;
+  const rank = el('new-entry-rank').value.trim().toUpperCase();
+  const name = el('new-entry-name').value.trim().toUpperCase();
+  if (!name) return;
+  if (!S.rotas.find(r => r.rota===rota && r.rank===rank && r.name===name))
+    S.rotas.push({rota, rank, name});
+  saveRotasToStorage();
+  el('new-entry-rank').value = ''; el('new-entry-name').value = '';
+  rebuildRotaPeopleDB(); renderRotaSettingsList();
+}
+
+function removeRotaEntry(idx) {
+  S.rotas.splice(idx, 1);
+  saveRotasToStorage();
+  rebuildRotaPeopleDB(); renderRotaSettingsList();
+}
+
+function importRotaEntriesFromUI() {
+  const text = el('rota-import-text').value.trim(); if (!text) return;
+  const VALID_ROTAS = ['Rota 1','Rota 2','Rota 3'];
+  // Split on newlines; each line may itself be comma-separated entries
+  const tokens = text.split(/\n/).flatMap(line => line.split(','));
+  let added = 0;
+  tokens.forEach(tok => {
+    const parts = tok.trim().split('|').map(s => s.trim());
+    if (parts.length === 3) {
+      const [rota, rank, name] = [parts[0], parts[1].toUpperCase(), parts[2].toUpperCase()];
+      if (name && VALID_ROTAS.includes(rota) && !S.rotas.find(r=>r.rota===rota&&r.rank===rank&&r.name===name)) {
+        S.rotas.push({rota, rank, name}); added++;
+      }
+    }
+  });
+  if (added) { saveRotasToStorage(); rebuildRotaPeopleDB(); renderRotaSettingsList(); }
+  el('rota-import-text').value = '';
+}
+
+function renderRotaSettingsList() {
+  const wrap = el('rota-entries-list'); if (!wrap) return;
+  if (!S.rotas.length) { wrap.innerHTML = '<span class="no-names-hint">No IC entries yet — add one below or use Quick Import.</span>'; return; }
+  const cls = {'Rota 1':'re-r1','Rota 2':'re-r2','Rota 3':'re-r3'};
+  wrap.innerHTML = S.rotas.map((r,i) => `
+    <div class="rota-entry-row">
+      <span class="rota-entry-badge ${cls[r.rota]||''}">${r.rota}</span>
+      <span class="rota-entry-rank">${esc(r.rank)||'—'}</span>
+      <span class="rota-entry-name">${esc(r.name)}</span>
+      <button class="entry-remove-btn" onclick="removeRotaEntry(${i})" title="Remove">✕</button>
+    </div>`).join('');
+}
+
+// ---- Appliance CRUD ----
+function addApplianceFromUI() {
+  const code = el('new-appliance-code').value.trim().toUpperCase(); if (!code) return;
+  if (!S.appliances.find(a => a.code === code)) { S.appliances.push({code, desc:''}); saveAppliancesToStorage(); renderApplianceSettingsList(); }
+  el('new-appliance-code').value = '';
+}
+
+function removeAppliance(idx) {
+  S.appliances.splice(idx, 1); saveAppliancesToStorage(); renderApplianceSettingsList();
+}
+
+function importAppliancesFromUI() {
+  const text = el('appliance-import-text').value.trim(); if (!text) return;
+  const codes = text.split(/[\n,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+  let added = 0;
+  codes.forEach(code => { if (!S.appliances.find(a=>a.code===code)) { S.appliances.push({code,desc:''}); added++; } });
+  if (added) { saveAppliancesToStorage(); renderApplianceSettingsList(); }
+  el('appliance-import-text').value = '';
+}
+
+function renderApplianceSettingsList() {
+  const wrap = el('appliance-settings-list'); if (!wrap) return;
+  if (!S.appliances.length) { wrap.innerHTML = '<span class="no-names-hint">No appliances yet — add one below or use Quick Import.</span>'; return; }
+  wrap.innerHTML = S.appliances.map((a,i) => `
+    <div class="appliance-entry-row">
+      <span class="appliance-code-tag">${esc(a.code)}</span>
+      <button class="entry-remove-btn" onclick="removeAppliance(${i})" title="Remove">✕</button>
+    </div>`).join('');
 }
 
 // =============================================
@@ -184,35 +270,6 @@ function calNav(dir){
 function selectCalDay(y,m,d){ S.overrideDate=new Date(y,m,d); renderCalendar(); applyOverrideShift(); }
 
 // =============================================
-// CSV LOADING
-// =============================================
-function parseCSV(text) {
-  return text.trim().split('\n').map(line=>{
-    const cols=[];let cur='',inQ=false;
-    for(const c of line){if(c==='"'){inQ=!inQ;continue;}if(c===','&&!inQ){cols.push(cur.trim());cur='';}else cur+=c;}
-    cols.push(cur.trim());return cols;
-  });
-}
-async function fetchCSV(path){const r=await fetch(path+'?_='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}
-async function loadFromCSV(){
-  const cfg=loadConfig();
-  try{
-    const text=await fetchCSV(cfg.rotasPath||'rotas.csv');
-    const rows=parseCSV(text).slice(1);
-    S.rotas=rows.filter(r=>r.length>=4&&r[1]).map(r=>({rota:r[1].trim(),rank:r[2].trim().toUpperCase(),name:r[3].trim().toUpperCase()}));
-    // Rebuild rota people DB from scratch so removed names don't linger
-    saveRotaPeopleDB({nextId:1,people:[]});
-    S.rotas.forEach(p=>findOrAddRotaPerson(p.rota,p.rank,p.name));
-  }catch{S.rotas=[];console.warn('Could not load rotas.csv');}
-  try{
-    const text=await fetchCSV(cfg.appliancesPath||'appliances.csv');
-    const rows=parseCSV(text).slice(1);
-    S.appliances=rows.filter(r=>r.length>=1&&r[0]).map(r=>({code:r[0].trim().toUpperCase(),desc:(r[1]||'').trim()}));
-  }catch{S.appliances=[];console.warn('Could not load appliances.csv');}
-  renderICButtons();renderApplianceList();renderRotaPeopleList();updateValidation();
-}
-async function reloadData(){saveConfig();await loadFromCSV();}
-
 // =============================================
 // IC BUTTONS
 // =============================================
@@ -543,9 +600,25 @@ function parseRedcon(){
   }
 
   const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
-  const A4_RE=/^A4\d{2}$/i; const found={};
+  // Tab-separated (Outlook): "A411\tSGT\tName" all on one line
+  const A4_TAB_RE=/^(A4\d{2})\t([^\t]+)\t(.+)$/i;
+  // Multi-line: "A411" alone, then rank and name on following lines
+  const A4_RE=/^A4\d{2}$/i;
+  const found={};
   for(let i=0;i<lines.length;i++){
-    const code=lines[i].trim().toUpperCase(); if(!A4_RE.test(code)) continue;
+    const line=lines[i];
+    const trimmed=line.trim();
+
+    // Try tab-separated format first
+    const tabMatch=trimmed.match(A4_TAB_RE);
+    if(tabMatch){
+      const code=tabMatch[1].toUpperCase();
+      found[code]={rank:tabMatch[2].trim().toUpperCase(), name:tabMatch[3].trim().toUpperCase()};
+      continue;
+    }
+
+    // Fall back to multi-line format
+    const code=trimmed.toUpperCase(); if(!A4_RE.test(code)) continue;
     let rank='',name='';
     for(let j=i+1;j<lines.length&&j<=i+5;j++){
       const t=lines[j].trim(); if(!t) continue;
@@ -760,16 +833,6 @@ function toggleSettings(){
   const no=!panel.classList.contains('hidden');
   panel.classList.toggle('hidden',no); chevron.textContent=no?'▸':'▾';
 }
-function renderApplianceList(){
-  const wrap=el('appliance-list');
-  if(!S.appliances.length){wrap.innerHTML='<span class="no-names-hint">No appliances loaded.</span>';return;}
-  wrap.innerHTML=S.appliances.map(a=>`<span class="appliance-chip" title="${esc(a.desc)}">${a.code}</span>`).join('');
-}
-function renderRotaPeopleList(){
-  const wrap=el('rota-people-list'); if(!wrap) return; const db=loadRotaPeopleDB();
-  if(!db.people.length){wrap.innerHTML='<span class="no-names-hint">No rota members loaded yet.</span>';return;}
-  wrap.innerHTML=db.people.map(p=>`<div class="person-row"><span class="pid">#${p.id}</span><span class="prank">${p.rank||'—'}</span><span class="pname">${p.name} <span style="color:var(--text-3);font-size:11px">(${p.rota})</span></span></div>`).join('');
-}
 
 // =============================================
 // UTILS
@@ -782,15 +845,19 @@ function fmtDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart
 // =============================================
 // INIT
 // =============================================
-async function init(){
-  const cfg=loadConfig();
-  if(cfg.rotasPath)      el('cfg-rotas-path').value=cfg.rotasPath;
-  if(cfg.appliancesPath) el('cfg-appliances-path').value=cfg.appliancesPath;
+function init(){
+  // Load rotas & appliances from localStorage
+  S.rotas      = loadRotasFromStorage();
+  S.appliances = loadAppliancesFromStorage();
+  // Rebuild rota people ID DB from stored entries
+  saveRotaPeopleDB({nextId:1, people:[]});
+  S.rotas.forEach(p => findOrAddRotaPerson(p.rota, p.rank, p.name));
 
   buildDrums();
   applyShiftResult(computeShift(new Date()));
   initCalendar();
-  await loadFromCSV();
-  renderRotaPeopleList(); updateValidation();
+  renderRotaSettingsList();
+  renderApplianceSettingsList();
+  updateValidation();
 }
 document.addEventListener('DOMContentLoaded',init);

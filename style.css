@@ -1007,3 +1007,161 @@ h1 {
 .person-row .pid { font-size: 11px; color: var(--text-3); font-family: monospace; min-width: 28px; }
 .person-row .prank { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; min-width: 36px; }
 .person-row .pname { font-weight: 500; flex: 1; }
+
+/* =============================================
+   SETTINGS — IC ENTRIES & APPLIANCES MANAGEMENT
+   ============================================= */
+
+/* Add-entry form row */
+.settings-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+.settings-select {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.text-input.settings-sm {
+  width: auto;
+  flex: 1;
+  min-width: 80px;
+  max-width: 160px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+/* Rota entries list */
+.rota-entries-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+.rota-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 13px;
+}
+.rota-entry-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+.re-r1 { background: color-mix(in srgb,#007aff 15%,var(--surface)); color:#007aff; }
+.re-r2 { background: color-mix(in srgb,#34c759 15%,var(--surface)); color:#34c759; }
+.re-r3 { background: color-mix(in srgb,#ff9500 15%,var(--surface)); color:#ff9500; }
+.rota-entry-rank { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; min-width: 36px; }
+.rota-entry-name { flex: 1; font-weight: 500; color: var(--text); }
+
+/* Appliance entries list */
+.appliance-settings-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.appliance-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 4px 3px 10px;
+}
+.appliance-code-tag {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: monospace;
+  color: var(--text);
+}
+
+/* Shared remove button */
+.entry-remove-btn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: none;
+  color: var(--text-3);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--transition), color var(--transition);
+}
+.entry-remove-btn:hover { background: color-mix(in srgb,var(--danger) 12%,var(--surface)); color: var(--danger); }
+
+/* Quick import collapsible */
+.settings-import-block {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0;
+  overflow: hidden;
+}
+.settings-import-block summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.settings-import-block summary::-webkit-details-marker { display: none; }
+.settings-import-block summary::before { content: '▸ '; }
+.settings-import-block[open] summary::before { content: '▾ '; }
+.settings-import-block[open] {
+  padding-bottom: 12px;
+}
+.settings-import-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.55;
+  padding: 0 12px 8px;
+}
+.settings-import-hint code {
+  font-family: monospace;
+  background: var(--surface-2);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.settings-import-box {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 0 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: "SF Mono","Cascadia Code",monospace;
+  font-size: 12px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+.settings-import-box:focus { outline: none; border-color: var(--accent); }
+.settings-import-block .secondary-btn { margin-left: 12px; }

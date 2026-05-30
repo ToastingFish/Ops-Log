@@ -162,25 +162,57 @@
         <div id="settings-panel" class="hidden">
           <div class="settings-inner">
 
-            <label class="field-label">Rotas CSV file path</label>
-            <input type="text" class="text-input" id="cfg-rotas-path"
-                   placeholder="rotas.csv" oninput="saveConfig()">
-
-            <label class="field-label">Appliances CSV file path</label>
-            <input type="text" class="text-input" id="cfg-appliances-path"
-                   placeholder="appliances.csv" oninput="saveConfig()">
-
-            <button class="secondary-btn" onclick="reloadData()">Reload CSV Files</button>
-
+            <!-- ── IC ENTRIES ── -->
             <div class="settings-section-head">
-              <span class="field-label" style="margin:0">Appliances loaded</span>
+              <span class="field-label" style="margin:0">IC Entries</span>
             </div>
-            <div id="appliance-list" class="appliance-list"></div>
 
-            <div class="settings-section-head">
-              <span class="field-label" style="margin:0">Rota members</span>
+            <div id="rota-entries-list" class="rota-entries-list"></div>
+
+            <div class="settings-add-form">
+              <select class="settings-select" id="new-entry-rota">
+                <option>Rota 1</option><option>Rota 2</option><option>Rota 3</option>
+              </select>
+              <input type="text" class="text-input settings-sm" id="new-entry-rank" placeholder="Rank">
+              <input type="text" class="text-input settings-sm" id="new-entry-name" placeholder="Name">
+              <button class="secondary-btn-sm" onclick="addRotaEntryFromUI()">+ Add</button>
             </div>
-            <div id="rota-people-list" class="people-list"></div>
+
+            <details class="settings-import-block">
+              <summary>Quick import…</summary>
+              <p class="settings-import-hint">
+                One entry per line (or comma-separated):<br>
+                <code>Rota 1|SGT|Ahmad, Rota 1|CPL|Raza</code><br>
+                <code>Rota 2|SGT|Prawin</code>
+              </p>
+              <textarea class="settings-import-box" id="rota-import-text" rows="5"
+                placeholder="Rota 1|SGT|Name&#10;Rota 2|CPL|Name"></textarea>
+              <button class="secondary-btn" onclick="importRotaEntriesFromUI()">Import</button>
+            </details>
+
+            <!-- ── APPLIANCES ── -->
+            <div class="settings-section-head" style="margin-top:18px">
+              <span class="field-label" style="margin:0">Appliances</span>
+            </div>
+
+            <div id="appliance-settings-list" class="appliance-settings-list"></div>
+
+            <div class="settings-add-form">
+              <input type="text" class="text-input settings-sm" id="new-appliance-code" placeholder="e.g. A411"
+                     onkeydown="if(event.key==='Enter')addApplianceFromUI()">
+              <button class="secondary-btn-sm" onclick="addApplianceFromUI()">+ Add</button>
+            </div>
+
+            <details class="settings-import-block">
+              <summary>Quick import…</summary>
+              <p class="settings-import-hint">
+                Comma-separated or one per line:<br>
+                <code>A411, A412, A421, A422</code>
+              </p>
+              <textarea class="settings-import-box" id="appliance-import-text" rows="3"
+                placeholder="A411, A412, A421"></textarea>
+              <button class="secondary-btn" onclick="importAppliancesFromUI()">Import</button>
+            </details>
 
           </div>
         </div>

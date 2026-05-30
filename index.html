@@ -170,22 +170,12 @@
             <input type="text" class="text-input" id="cfg-appliances-path"
                    placeholder="appliances.csv" oninput="saveConfig()">
 
-            <label class="field-label">People CSV file path</label>
-            <input type="text" class="text-input" id="cfg-people-path"
-                   placeholder="people.csv" oninput="saveConfig()">
-
             <button class="secondary-btn" onclick="reloadData()">Reload CSV Files</button>
 
             <div class="settings-section-head">
               <span class="field-label" style="margin:0">Appliances loaded</span>
             </div>
             <div id="appliance-list" class="appliance-list"></div>
-
-            <div class="settings-section-head">
-              <span class="field-label" style="margin:0">Alpha manning people</span>
-              <button class="secondary-btn-sm" onclick="exportPeopleCSV()">Export CSV</button>
-            </div>
-            <div id="people-list" class="people-list"></div>
 
             <div class="settings-section-head">
               <span class="field-label" style="margin:0">Rota members</span>

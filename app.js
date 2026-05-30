@@ -11,7 +11,6 @@ function saveConfig() {
   const cfg = {
     rotasPath:      el('cfg-rotas-path').value.trim()      || 'rotas.csv',
     appliancesPath: el('cfg-appliances-path').value.trim() || 'appliances.csv',
-    peoplePath:     el('cfg-people-path').value.trim()     || 'people.csv',
   };
   localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
 }
@@ -60,15 +59,6 @@ function findOrAddPerson(rank, name) {
 }
 function getPersonById(id) {
   if (!id) return null; return loadPeopleDB().people.find(p => p.id === id) || null;
-}
-function exportPeopleCSV() {
-  const db = loadPeopleDB();
-  let csv = 'PersonID,Rank,Name\n';
-  db.people.forEach(p => { csv += `${p.id},${p.rank},${p.name}\n`; });
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'people.csv'; a.click();
-  URL.revokeObjectURL(url);
 }
 
 // =============================================
@@ -203,13 +193,15 @@ function parseCSV(text) {
     cols.push(cur.trim());return cols;
   });
 }
-async function fetchCSV(path){const r=await fetch(path);if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}
+async function fetchCSV(path){const r=await fetch(path+'?_='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}
 async function loadFromCSV(){
   const cfg=loadConfig();
   try{
     const text=await fetchCSV(cfg.rotasPath||'rotas.csv');
     const rows=parseCSV(text).slice(1);
     S.rotas=rows.filter(r=>r.length>=4&&r[1]).map(r=>({rota:r[1].trim(),rank:r[2].trim().toUpperCase(),name:r[3].trim().toUpperCase()}));
+    // Rebuild rota people DB from scratch so removed names don't linger
+    saveRotaPeopleDB({nextId:1,people:[]});
     S.rotas.forEach(p=>findOrAddRotaPerson(p.rota,p.rank,p.name));
   }catch{S.rotas=[];console.warn('Could not load rotas.csv');}
   try{
@@ -217,18 +209,7 @@ async function loadFromCSV(){
     const rows=parseCSV(text).slice(1);
     S.appliances=rows.filter(r=>r.length>=1&&r[0]).map(r=>({code:r[0].trim().toUpperCase(),desc:(r[1]||'').trim()}));
   }catch{S.appliances=[];console.warn('Could not load appliances.csv');}
-  try{
-    const text=await fetchCSV(cfg.peoplePath||'people.csv');
-    const rows=parseCSV(text).slice(1);const db=loadPeopleDB();let changed=false;
-    rows.forEach(r=>{
-      if(r.length>=3&&r[0]&&!isNaN(parseInt(r[0],10))){
-        const id=parseInt(r[0],10);
-        if(!db.people.find(p=>p.id===id)){db.people.push({id,rank:r[1].trim().toUpperCase(),name:r[2].trim().toUpperCase()});if(id>=db.nextId)db.nextId=id+1;changed=true;}
-      }
-    });
-    if(changed)savePeopleDB(db);
-  }catch{}
-  renderICButtons();renderApplianceList();renderPeopleList();renderRotaPeopleList();updateValidation();
+  renderICButtons();renderApplianceList();renderRotaPeopleList();updateValidation();
 }
 async function reloadData(){saveConfig();await loadFromCSV();}
 
@@ -585,7 +566,7 @@ function parseRedcon(){
     }
   });
   S.redconCautionState=S.redconData.some(r=>r.personId)?null:'nonames';
-  renderRedconTable(); renderPeopleList(); renderRedconCaution(); updateValidation();
+  renderRedconTable(); renderRedconCaution(); updateValidation();
 }
 
 function updateRedconCautionState(){
@@ -784,11 +765,6 @@ function renderApplianceList(){
   if(!S.appliances.length){wrap.innerHTML='<span class="no-names-hint">No appliances loaded.</span>';return;}
   wrap.innerHTML=S.appliances.map(a=>`<span class="appliance-chip" title="${esc(a.desc)}">${a.code}</span>`).join('');
 }
-function renderPeopleList(){
-  const wrap=el('people-list'); const db=loadPeopleDB();
-  if(!db.people.length){wrap.innerHTML='<span class="no-names-hint">No alpha manning people yet.</span>';return;}
-  wrap.innerHTML=db.people.map(p=>`<div class="person-row"><span class="pid">#${p.id}</span><span class="prank">${p.rank||'—'}</span><span class="pname">${p.name}</span></div>`).join('');
-}
 function renderRotaPeopleList(){
   const wrap=el('rota-people-list'); if(!wrap) return; const db=loadRotaPeopleDB();
   if(!db.people.length){wrap.innerHTML='<span class="no-names-hint">No rota members loaded yet.</span>';return;}
@@ -810,11 +786,11 @@ async function init(){
   const cfg=loadConfig();
   if(cfg.rotasPath)      el('cfg-rotas-path').value=cfg.rotasPath;
   if(cfg.appliancesPath) el('cfg-appliances-path').value=cfg.appliancesPath;
-  if(cfg.peoplePath)     el('cfg-people-path').value=cfg.peoplePath;
+
   buildDrums();
   applyShiftResult(computeShift(new Date()));
   initCalendar();
   await loadFromCSV();
-  renderPeopleList(); renderRotaPeopleList(); updateValidation();
+  renderRotaPeopleList(); updateValidation();
 }
 document.addEventListener('DOMContentLoaded',init);

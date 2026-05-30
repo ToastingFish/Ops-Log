@@ -8,6 +8,16 @@
 </head>
 <body>
 
+  <!-- MODAL OVERLAY -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal-box" id="modal-box">
+      <div class="modal-title" id="modal-title"></div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-actions" id="modal-actions"></div>
+    </div>
+    <div class="modal-dismiss-hint hidden" id="modal-dismiss-hint"></div>
+  </div>
+
   <header>
     <div class="header-inner">
       <h1>Ops Log</h1>
@@ -15,145 +25,178 @@
     </div>
   </header>
 
-  <main>
+  <main class="main-grid">
 
-    <!-- SHIFT SECTION -->
-    <section class="card" id="section-shift">
-      <h2>Shift</h2>
-      <div class="toggle-row">
-        <button class="toggle-btn active" id="btn-auto" onclick="setShiftMode('auto')">Auto-detect</button>
-        <button class="toggle-btn" id="btn-override" onclick="setShiftMode('override')">Override</button>
-      </div>
+    <!-- ===== LEFT COLUMN ===== -->
+    <div class="col-left">
 
-      <div id="override-panel" class="hidden">
-        <div class="override-inner">
-          <div id="calendar"></div>
-          <div class="shift-type-picker">
-            <button class="seg-btn active" id="seg-day" onclick="setOverrideShiftType('D')">Day</button>
-            <button class="seg-btn" id="seg-night" onclick="setOverrideShiftType('N')">Night</button>
-          </div>
+      <!-- SHIFT SECTION -->
+      <section class="card" id="section-shift">
+        <div class="section-head">
+          <h2>Shift</h2>
         </div>
-      </div>
+        <div class="toggle-row">
+          <button class="toggle-btn active" id="btn-auto" onclick="setShiftMode('auto')">Auto-detect</button>
+          <button class="toggle-btn" id="btn-override" onclick="setShiftMode('override')">Override</button>
+        </div>
 
-      <div id="rota-display" class="rota-display"></div>
-    </section>
-
-    <!-- CURRENT IC -->
-    <section class="card" id="section-current-ic">
-      <h2>Current IC</h2>
-      <div id="current-ic-buttons" class="name-buttons"></div>
-    </section>
-
-    <!-- INCOMING IC -->
-    <section class="card" id="section-incoming-ic">
-      <h2>Incoming IC</h2>
-      <div id="incoming-ic-buttons" class="name-buttons"></div>
-    </section>
-
-    <!-- P3 SECTION -->
-    <section class="card" id="section-p3">
-      <h2>P3 Turnout</h2>
-      <div class="toggle-row">
-        <button class="toggle-btn active" id="btn-nop3" onclick="setP3(false)">No P3</button>
-        <button class="toggle-btn p3-yes" id="btn-yesp3" onclick="setP3(true)">P3 Occurred</button>
-      </div>
-
-      <div id="p3-panel" class="hidden">
-        <div class="p3-inner">
-          <label class="field-label">Activated by</label>
-          <div id="p3-activator-buttons" class="name-buttons"></div>
-
-          <div class="p3-timings">
-            <div class="timing-row" data-index="0">
-              <span class="timing-label">Activated</span>
-              <div class="drum-wrap">
-                <div class="drum" id="drum-p3-0-h" data-field="p3-0-h"></div>
-                <span class="drum-colon">:</span>
-                <div class="drum" id="drum-p3-0-m" data-field="p3-0-m"></div>
-              </div>
-              <button class="override-toggle" id="ovr-0" onclick="toggleP3Override(0)" title="Override shift window"></button>
-            </div>
-            <div class="timing-row" data-index="1">
-              <span class="timing-label">Left Division</span>
-              <div class="drum-wrap">
-                <div class="drum" id="drum-p3-1-h" data-field="p3-1-h"></div>
-                <span class="drum-colon">:</span>
-                <div class="drum" id="drum-p3-1-m" data-field="p3-1-m"></div>
-              </div>
-              <button class="override-toggle" id="ovr-1" onclick="toggleP3Override(1)" title="Override shift window"></button>
-            </div>
-            <div class="timing-row" data-index="2">
-              <span class="timing-label">Arrived</span>
-              <div class="drum-wrap">
-                <div class="drum" id="drum-p3-2-h" data-field="p3-2-h"></div>
-                <span class="drum-colon">:</span>
-                <div class="drum" id="drum-p3-2-m" data-field="p3-2-m"></div>
-              </div>
-              <button class="override-toggle" id="ovr-2" onclick="toggleP3Override(2)" title="Override shift window"></button>
-            </div>
-            <div class="timing-row" data-index="3">
-              <span class="timing-label">Left Location</span>
-              <div class="drum-wrap">
-                <div class="drum" id="drum-p3-3-h" data-field="p3-3-h"></div>
-                <span class="drum-colon">:</span>
-                <div class="drum" id="drum-p3-3-m" data-field="p3-3-m"></div>
-              </div>
-              <button class="override-toggle" id="ovr-3" onclick="toggleP3Override(3)" title="Override shift window"></button>
-            </div>
-            <div class="timing-row" data-index="4">
-              <span class="timing-label">Reached Division</span>
-              <div class="drum-wrap">
-                <div class="drum" id="drum-p3-4-h" data-field="p3-4-h"></div>
-                <span class="drum-colon">:</span>
-                <div class="drum" id="drum-p3-4-m" data-field="p3-4-m"></div>
-              </div>
-              <button class="override-toggle" id="ovr-4" onclick="toggleP3Override(4)" title="Override shift window"></button>
+        <div id="override-panel" class="hidden">
+          <div class="override-inner">
+            <div id="calendar"></div>
+            <div class="shift-type-picker">
+              <button class="seg-btn active" id="seg-day" onclick="setOverrideShiftType('D')">Day</button>
+              <button class="seg-btn" id="seg-night" onclick="setOverrideShiftType('N')">Night</button>
             </div>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- REDCON (night only) -->
-    <section class="card hidden" id="section-redcon">
-      <h2>REDCON</h2>
-      <p class="hint">Paste the REDCON email below. Alpha manning will be extracted automatically.</p>
-      <textarea id="redcon-paste" rows="8" placeholder="Paste REDCON email here…" oninput="parseRedcon()"></textarea>
-      <div id="redcon-results" class="redcon-table-wrap hidden"></div>
-    </section>
+        <div id="rota-display" class="rota-display"></div>
+      </section>
 
-    <!-- GENERATE -->
-    <section class="card" id="section-generate">
-      <button class="generate-btn" id="generate-btn" onclick="generate()">
-        <span id="generate-label">Copy Code to Clipboard</span>
-      </button>
-      <div id="generate-msg" class="generate-msg hidden"></div>
-    </section>
+      <!-- CURRENT IC -->
+      <section class="card" id="section-current-ic">
+        <div class="section-head">
+          <h2>Current IC</h2>
+          <span class="err-badge hidden" id="err-current-ic">!</span>
+        </div>
+        <div id="current-ic-buttons" class="name-buttons"></div>
+      </section>
 
-    <!-- SETTINGS -->
-    <section class="card" id="section-settings">
-      <button class="settings-toggle" onclick="toggleSettings()">
-        <span>Settings</span>
-        <span id="settings-chevron">▸</span>
-      </button>
-      <div id="settings-panel" class="hidden">
-        <div class="settings-inner">
-          <label class="field-label">Google Sheets CSV — Rotas</label>
-          <input type="url" id="cfg-rotas-url" placeholder="https://docs.google.com/…" oninput="saveConfig()">
+      <!-- INCOMING IC -->
+      <section class="card" id="section-incoming-ic">
+        <div class="section-head">
+          <h2>Incoming IC</h2>
+          <span class="err-badge hidden" id="err-incoming-ic">!</span>
+        </div>
+        <div id="incoming-ic-buttons" class="name-buttons"></div>
+      </section>
 
-          <label class="field-label">Google Sheets CSV — Appliances</label>
-          <input type="url" id="cfg-appliances-url" placeholder="https://docs.google.com/…" oninput="saveConfig()">
+      <!-- REDCON (night only) -->
+      <section class="card hidden" id="section-redcon">
+        <div class="section-head">
+          <h2>REDCON Alpha</h2>
+          <span class="err-badge hidden" id="err-redcon">!</span>
+        </div>
+        <p class="hint">Paste the REDCON email below. Alpha manning will be extracted automatically.</p>
+        <textarea id="redcon-paste" rows="8" placeholder="Paste REDCON email here…"
+                  oninput="parseRedcon()"></textarea>
+        <div id="redcon-results" class="redcon-table-wrap hidden"></div>
 
-          <button class="secondary-btn" onclick="reloadSheets()">Reload from Sheets</button>
-
-          <div id="appliance-list-wrap" class="appliance-list-wrap">
-            <label class="field-label">Appliance master list (from sheet)</label>
-            <div id="appliance-list"></div>
-            <a id="appliances-sheet-link" class="sheet-link hidden" target="_blank" href="#">Open Appliances Sheet ↗</a>
+        <div id="redcon-caution-empty" class="caution-box hidden">
+          <span class="caution-icon">⚠</span>
+          <div class="caution-text">
+            <span class="caution-msg">No REDCON data entered — appliance IC names will be blank in the generated log.</span>
+            <button class="caution-dismiss-btn" onclick="dismissRedconCaution()">Yes, proceed without alpha data</button>
           </div>
         </div>
-      </div>
-    </section>
+
+        <div id="redcon-caution-nonames" class="caution-box hidden">
+          <span class="caution-icon">⚠</span>
+          <div class="caution-text">
+            <span class="caution-msg">No alpha manning names were found in the pasted text — appliance IC names will be blank in the generated log.</span>
+            <button class="caution-dismiss-btn" onclick="dismissRedconCaution()">Yes, proceed without alpha data</button>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /col-left -->
+
+    <!-- ===== RIGHT COLUMN ===== -->
+    <div class="col-right">
+
+      <!-- P3 SECTION -->
+      <section class="card" id="section-p3">
+        <div class="section-head">
+          <h2>P3 Turnout</h2>
+          <span class="err-badge hidden" id="err-p3">!</span>
+        </div>
+        <div class="toggle-row">
+          <button class="toggle-btn active" id="btn-nop3" onclick="setP3(false)">No P3</button>
+          <button class="toggle-btn p3-yes" id="btn-yesp3" onclick="setP3(true)">P3 Turnout</button>
+        </div>
+
+        <div id="p3-panel" class="hidden">
+          <div class="p3-inner">
+
+            <div class="p3-activator-group">
+              <label class="field-label">Activated by</label>
+              <div class="p3-activator-presets" id="p3-activator-presets">
+                <button class="activator-btn" id="abtn-opsctr"  onclick="selectP3Preset('OPS CTR')">OPS CTR</button>
+                <button class="activator-btn" id="abtn-headops" onclick="selectP3Preset('HEAD OPS')">HEAD OPS</button>
+                <button class="activator-btn" id="abtn-others"  onclick="selectP3Preset('others')">Others…</button>
+              </div>
+              <div id="p3-others-wrap" class="hidden">
+                <input type="text" class="text-input" id="p3-others-input"
+                       placeholder="Enter name or rank+name…"
+                       oninput="onP3OthersInput()">
+              </div>
+              <div class="p3-activator-current hidden" id="p3-activator-current"></div>
+            </div>
+
+            <!-- Timing drums — DOM built by buildDrums() in app.js -->
+            <div class="p3-timings">
+              <div class="timing-row"><span class="timing-label">Activated</span>    <div class="drum-picker" id="drum-0"></div><div class="timing-feedback" id="tf-0"></div></div>
+              <div class="timing-row"><span class="timing-label">Left Division</span> <div class="drum-picker" id="drum-1"></div><div class="timing-feedback" id="tf-1"></div></div>
+              <div class="timing-row"><span class="timing-label">Arrived</span>       <div class="drum-picker" id="drum-2"></div><div class="timing-feedback" id="tf-2"></div></div>
+              <div class="timing-row"><span class="timing-label">Left Location</span> <div class="drum-picker" id="drum-3"></div><div class="timing-feedback" id="tf-3"></div></div>
+              <div class="timing-row"><span class="timing-label">Reached Div.</span>  <div class="drum-picker" id="drum-4"></div><div class="timing-feedback" id="tf-4"></div></div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- GENERATE -->
+      <section class="card" id="section-generate">
+        <button class="generate-btn has-errors" id="generate-btn" onclick="generate()">
+          Copy Code to Clipboard
+        </button>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="card" id="section-settings">
+        <button class="settings-toggle" onclick="toggleSettings()">
+          <span>Settings</span>
+          <span id="settings-chevron">▸</span>
+        </button>
+        <div id="settings-panel" class="hidden">
+          <div class="settings-inner">
+
+            <label class="field-label">Rotas CSV file path</label>
+            <input type="text" class="text-input" id="cfg-rotas-path"
+                   placeholder="rotas.csv" oninput="saveConfig()">
+
+            <label class="field-label">Appliances CSV file path</label>
+            <input type="text" class="text-input" id="cfg-appliances-path"
+                   placeholder="appliances.csv" oninput="saveConfig()">
+
+            <label class="field-label">People CSV file path</label>
+            <input type="text" class="text-input" id="cfg-people-path"
+                   placeholder="people.csv" oninput="saveConfig()">
+
+            <button class="secondary-btn" onclick="reloadData()">Reload CSV Files</button>
+
+            <div class="settings-section-head">
+              <span class="field-label" style="margin:0">Appliances loaded</span>
+            </div>
+            <div id="appliance-list" class="appliance-list"></div>
+
+            <div class="settings-section-head">
+              <span class="field-label" style="margin:0">Alpha manning people</span>
+              <button class="secondary-btn-sm" onclick="exportPeopleCSV()">Export CSV</button>
+            </div>
+            <div id="people-list" class="people-list"></div>
+
+            <div class="settings-section-head">
+              <span class="field-label" style="margin:0">Rota members</span>
+            </div>
+            <div id="rota-people-list" class="people-list"></div>
+
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /col-right -->
 
   </main>
 

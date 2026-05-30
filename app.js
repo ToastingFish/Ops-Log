@@ -1,110 +1,143 @@
 'use strict';
 
 // =============================================
-// CONFIG — persisted to localStorage
+// CONFIG
 // =============================================
-const CFG_KEY = 'opslog_config';
-
+const CFG_KEY = 'opslog_config_v2';
 function loadConfig() {
   try { return JSON.parse(localStorage.getItem(CFG_KEY)) || {}; } catch { return {}; }
 }
 function saveConfig() {
   const cfg = {
-    rotasUrl: el('cfg-rotas-url').value.trim(),
-    appliancesUrl: el('cfg-appliances-url').value.trim(),
+    rotasPath:      el('cfg-rotas-path').value.trim()      || 'rotas.csv',
+    appliancesPath: el('cfg-appliances-path').value.trim() || 'appliances.csv',
+    peoplePath:     el('cfg-people-path').value.trim()     || 'people.csv',
   };
   localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+}
+
+// =============================================
+// ROTA PEOPLE DATABASE
+// =============================================
+const ROTA_PEOPLE_KEY = 'opslog_rota_people_v2';
+function loadRotaPeopleDB() {
+  try {
+    const d = JSON.parse(localStorage.getItem(ROTA_PEOPLE_KEY));
+    return (d && Array.isArray(d.people)) ? d : { nextId: 1, people: [] };
+  } catch { return { nextId: 1, people: [] }; }
+}
+function saveRotaPeopleDB(db) { localStorage.setItem(ROTA_PEOPLE_KEY, JSON.stringify(db)); }
+function findOrAddRotaPerson(rota, rank, name) {
+  rota = (rota||'').trim(); rank = (rank||'').trim().toUpperCase(); name = (name||'').trim().toUpperCase();
+  if (!name) return null;
+  const db = loadRotaPeopleDB();
+  const ex = db.people.find(p => p.rank === rank && p.name === name);
+  if (ex) return ex.id;
+  const np = { id: db.nextId++, rota, rank, name }; db.people.push(np); saveRotaPeopleDB(db); return np.id;
+}
+function getRotaPersonById(id) {
+  if (id == null) return null; return loadRotaPeopleDB().people.find(p => p.id === id) || null;
+}
+
+// =============================================
+// ALPHA MANNING PEOPLE DATABASE
+// =============================================
+const PEOPLE_KEY = 'opslog_people_v2';
+function loadPeopleDB() {
+  try {
+    const d = JSON.parse(localStorage.getItem(PEOPLE_KEY));
+    return (d && Array.isArray(d.people)) ? d : { nextId: 1, people: [] };
+  } catch { return { nextId: 1, people: [] }; }
+}
+function savePeopleDB(db) { localStorage.setItem(PEOPLE_KEY, JSON.stringify(db)); }
+function findOrAddPerson(rank, name) {
+  rank = (rank||'').trim().toUpperCase(); name = (name||'').trim().toUpperCase();
+  if (!rank && !name) return null;
+  const db = loadPeopleDB();
+  const ex = db.people.find(p => p.rank === rank && p.name === name);
+  if (ex) return ex.id;
+  const np = { id: db.nextId++, rank, name }; db.people.push(np); savePeopleDB(db); return np.id;
+}
+function getPersonById(id) {
+  if (!id) return null; return loadPeopleDB().people.find(p => p.id === id) || null;
+}
+function exportPeopleCSV() {
+  const db = loadPeopleDB();
+  let csv = 'PersonID,Rank,Name\n';
+  db.people.forEach(p => { csv += `${p.id},${p.rank},${p.name}\n`; });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'people.csv'; a.click();
+  URL.revokeObjectURL(url);
 }
 
 // =============================================
 // STATE
 // =============================================
 const S = {
-  shiftMode: 'auto',           // 'auto' | 'override'
-  overrideDate: null,          // Date object
-  overrideShiftType: 'D',      // 'D' | 'N'
+  shiftMode: 'auto', overrideDate: null, overrideShiftType: 'D',
+  detectedShiftLabel: '', currentRota: '', incomingRota: '',
+  currentRotaPersonId: null, incomingRotaPersonId: null,
+  hasP3: false, p3PersonId: null, p3ActivatorMode: null,
 
-  detectedShiftLabel: '',      // 'Day' | 'Night'
-  currentRota: '',
-  incomingRota: '',
+  // Drum
+  timeH:            [null,  null,  null,  null,  null],
+  timeM:            [null,  null,  null,  null,  null],
+  timeAutoSet:      [false, false, false, false, false],
+  timeBlocked:      [false, false, false, false, false], // event disabled by user
+  timeGapDismissed: [false, false, false, false, false], // >2h gap caution dismissed
+  p3Times:          ['', '', '', '', ''],
 
-  currentIC: null,             // { rank, name }
-  incomingIC: null,
+  // REDCON
+  redconData: [],
+  redconCautionState: null,      // null | 'empty' | 'nonames'
+  redconCautionDismissed: false,
 
-  hasP3: false,
-  p3Activator: null,           // { rank, name }
-  p3Times: ['', '', '', '', ''],
-  p3Overrides: [false, false, false, false, false],
-
-  redconData: [],              // [{ code, rank, name }]
-
-  rotas: [],                   // [{ rota, rank, name }] from Sheets
-  appliances: [],              // [{ code }] from Sheets
-
-  drumH: {},                   // { fieldId: selectedHour }
-  drumM: {},                   // { fieldId: selectedMinute }
+  rotas: [], appliances: [],
 };
 
 // =============================================
-// ROTA CYCLE — mirrors VBA GetCurrentShiftInfo
+// ROTA CYCLE
 // =============================================
-const CYCLE_START = new Date(2026, 1, 17); // Feb 17 2026
-
+const CYCLE_START = new Date(2026, 1, 17);
 const ROTA_MAP = {
-  1: { day: ['Rota 1','Rota 2'], night: ['Rota 2','Rota 1'] },
-  2: { day: ['Rota 1','Rota 2'], night: ['Rota 2','Rota 3'] },
-  3: { day: ['Rota 3','Rota 1'], night: ['Rota 1','Rota 3'] },
-  4: { day: ['Rota 3','Rota 1'], night: ['Rota 1','Rota 2'] },
-  5: { day: ['Rota 2','Rota 3'], night: ['Rota 3','Rota 2'] },
-  6: { day: ['Rota 2','Rota 3'], night: ['Rota 3','Rota 1'] },
+  1:{day:['Rota 1','Rota 2'],night:['Rota 2','Rota 1']},
+  2:{day:['Rota 1','Rota 2'],night:['Rota 2','Rota 3']},
+  3:{day:['Rota 3','Rota 1'],night:['Rota 1','Rota 3']},
+  4:{day:['Rota 3','Rota 1'],night:['Rota 1','Rota 2']},
+  5:{day:['Rota 2','Rota 3'],night:['Rota 3','Rota 2']},
+  6:{day:['Rota 2','Rota 3'],night:['Rota 3','Rota 1']},
 };
-
 function computeShift(refDate) {
   const h = refDate.getHours(), m = refDate.getMinutes();
   const totalMin = h * 60 + m;
-  const isNight = totalMin >= 18 * 60 + 10 || totalMin < 8 * 60 + 10;
-
-  const shiftDate = new Date(refDate);
-  shiftDate.setHours(0, 0, 0, 0);
-  if (isNight && totalMin < 8 * 60 + 10) shiftDate.setDate(shiftDate.getDate() - 1);
-
-  const daysPassed = Math.floor((shiftDate - CYCLE_START) / 86400000);
-  const cycleDay = ((daysPassed % 6) + 6) % 6 + 1;
-  const key = isNight ? 'night' : 'day';
-  const [cur, inc] = ROTA_MAP[cycleDay][key];
-
-  return {
-    shiftLabel: isNight ? 'Night' : 'Day',
-    currentRota: cur,
-    incomingRota: inc,
-    shiftDate,
-  };
+  const isNight = totalMin >= 18*60+10 || totalMin < 8*60+10;
+  const sd = new Date(refDate); sd.setHours(0,0,0,0);
+  if (isNight && totalMin < 8*60+10) sd.setDate(sd.getDate()-1);
+  const dp = Math.floor((sd - CYCLE_START)/86400000);
+  const cy = ((dp % 6)+6)%6+1;
+  const [cur,inc] = ROTA_MAP[cy][isNight?'night':'day'];
+  return { shiftLabel: isNight?'Night':'Day', currentRota: cur, incomingRota: inc };
 }
-
 function applyShiftResult(r) {
-  S.detectedShiftLabel = r.shiftLabel;
-  S.currentRota = r.currentRota;
-  S.incomingRota = r.incomingRota;
-
+  S.detectedShiftLabel = r.shiftLabel; S.currentRota = r.currentRota; S.incomingRota = r.incomingRota;
   const badge = el('shift-badge');
   badge.textContent = r.shiftLabel + ' · ' + r.currentRota;
   badge.className = 'shift-badge ' + r.shiftLabel.toLowerCase();
-
   el('rota-display').innerHTML =
     `<span class="rota-chip">Current: <strong>${r.currentRota}</strong></span>` +
     `<span class="rota-chip">Incoming: <strong>${r.incomingRota}</strong></span>`;
-
-  // Show/hide REDCON section
   if (r.shiftLabel === 'Night') {
     el('section-redcon').classList.remove('hidden');
+    updateRedconCautionState();
+    renderRedconTable();
   } else {
     el('section-redcon').classList.add('hidden');
-    S.redconData = [];
+    S.redconData = []; S.redconCautionState = null; S.redconCautionDismissed = false;
+    renderRedconCaution();
   }
-
-  renderICButtons();
-  renderP3Activator();
-  refreshDrums();
+  S.currentRotaPersonId = null; S.incomingRotaPersonId = null;
+  renderICButtons(); renderP3Activator(); refreshDrums(); updateValidation();
 }
 
 // =============================================
@@ -112,613 +145,676 @@ function applyShiftResult(r) {
 // =============================================
 function setShiftMode(mode) {
   S.shiftMode = mode;
-  toggle('btn-auto', mode === 'auto');
-  toggle('btn-override', mode === 'override');
-  el('override-panel').classList.toggle('hidden', mode === 'auto');
-
-  if (mode === 'auto') {
-    S.overrideDate = null;
-    const r = computeShift(new Date());
-    applyShiftResult(r);
-  } else {
-    if (!S.overrideDate) {
-      S.overrideDate = new Date();
-      S.overrideDate.setHours(0, 0, 0, 0);
-    }
-    applyOverrideShift();
-  }
+  toggle('btn-auto', mode==='auto'); toggle('btn-override', mode==='override');
+  el('override-panel').classList.toggle('hidden', mode==='auto');
+  if (mode==='auto') { S.overrideDate=null; applyShiftResult(computeShift(new Date())); }
+  else { if (!S.overrideDate){S.overrideDate=new Date();S.overrideDate.setHours(0,0,0,0);} applyOverrideShift(); }
 }
-
 function setOverrideShiftType(t) {
-  S.overrideShiftType = t;
-  toggle('seg-day', t === 'D');
-  toggle('seg-night', t === 'N');
-  applyOverrideShift();
+  S.overrideShiftType=t; toggle('seg-day',t==='D'); toggle('seg-night',t==='N'); applyOverrideShift();
 }
-
 function applyOverrideShift() {
   if (!S.overrideDate) return;
   const ref = new Date(S.overrideDate);
-  ref.setHours(S.overrideShiftType === 'D' ? 9 : 21, 0, 0, 0);
-  const r = computeShift(ref);
-  applyShiftResult(r);
+  ref.setHours(S.overrideShiftType==='D'?9:21,0,0,0);
+  applyShiftResult(computeShift(ref));
 }
 
 // =============================================
 // CALENDAR
 // =============================================
 let calViewYear, calViewMonth;
-
 function initCalendar() {
-  const now = new Date();
-  calViewYear = now.getFullYear();
-  calViewMonth = now.getMonth();
-  renderCalendar();
+  const n = new Date(); calViewYear=n.getFullYear(); calViewMonth=n.getMonth(); renderCalendar();
 }
-
 function renderCalendar() {
-  const months = ['January','February','March','April','May','June',
-                  'July','August','September','October','November','December'];
-  const today = new Date(); today.setHours(0,0,0,0);
-  const sel = S.overrideDate;
-
-  const first = new Date(calViewYear, calViewMonth, 1);
-  const startDow = first.getDay(); // 0=Sun
-  const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
-
-  const dows = ['Su','Mo','Tu','We','Th','Fr','Sa'];
-  let html = `
-    <div class="cal-header">
-      <button class="cal-nav" onclick="calNav(-1)">‹</button>
-      <span class="cal-month-label">${months[calViewMonth]} ${calViewYear}</span>
-      <button class="cal-nav" onclick="calNav(1)">›</button>
-    </div>
-    <div class="cal-grid">
-      ${dows.map(d => `<div class="cal-dow">${d}</div>`).join('')}
-  `;
-
-  for (let i = 0; i < startDow; i++) html += `<div class="cal-day empty"></div>`;
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(calViewYear, calViewMonth, d);
-    let cls = 'cal-day';
-    if (date.getTime() === today.getTime()) cls += ' today';
-    if (sel && date.getTime() === sel.getTime()) cls += ' selected';
-    html += `<div class="${cls}" onclick="selectCalDay(${calViewYear},${calViewMonth},${d})">${d}</div>`;
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const today=new Date(); today.setHours(0,0,0,0);
+  const sel=S.overrideDate; const first=new Date(calViewYear,calViewMonth,1);
+  const startDow=first.getDay(); const dim=new Date(calViewYear,calViewMonth+1,0).getDate();
+  let html=`<div class="cal-header"><button class="cal-nav" onclick="calNav(-1)">‹</button>
+    <span class="cal-month-label">${months[calViewMonth]} ${calViewYear}</span>
+    <button class="cal-nav" onclick="calNav(1)">›</button></div><div class="cal-grid">
+    ${['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=>`<div class="cal-dow">${d}</div>`).join('')}`;
+  for(let i=0;i<startDow;i++) html+=`<div class="cal-day empty"></div>`;
+  for(let d=1;d<=dim;d++){
+    const date=new Date(calViewYear,calViewMonth,d);
+    let cls='cal-day';
+    if(date.getTime()===today.getTime()) cls+=' today';
+    if(sel&&date.getTime()===sel.getTime()) cls+=' selected';
+    html+=`<div class="${cls}" onclick="selectCalDay(${calViewYear},${calViewMonth},${d})">${d}</div>`;
   }
-
-  html += '</div>';
-  el('calendar').innerHTML = html;
+  el('calendar').innerHTML=html+'</div>';
 }
-
-function calNav(dir) {
-  calViewMonth += dir;
-  if (calViewMonth < 0)  { calViewMonth = 11; calViewYear--; }
-  if (calViewMonth > 11) { calViewMonth = 0;  calViewYear++; }
+function calNav(dir){
+  calViewMonth+=dir;
+  if(calViewMonth<0){calViewMonth=11;calViewYear--;} if(calViewMonth>11){calViewMonth=0;calViewYear++;}
   renderCalendar();
 }
-
-function selectCalDay(y, m, d) {
-  S.overrideDate = new Date(y, m, d);
-  renderCalendar();
-  applyOverrideShift();
-}
+function selectCalDay(y,m,d){ S.overrideDate=new Date(y,m,d); renderCalendar(); applyOverrideShift(); }
 
 // =============================================
-// GOOGLE SHEETS — fetch CSV
+// CSV LOADING
 // =============================================
 function parseCSV(text) {
-  return text.trim().split('\n').map(line => {
-    const cols = [];
-    let cur = '', inQ = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') { inQ = !inQ; continue; }
-      if (c === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
-      else cur += c;
-    }
-    cols.push(cur.trim());
-    return cols;
+  return text.trim().split('\n').map(line=>{
+    const cols=[];let cur='',inQ=false;
+    for(const c of line){if(c==='"'){inQ=!inQ;continue;}if(c===','&&!inQ){cols.push(cur.trim());cur='';}else cur+=c;}
+    cols.push(cur.trim());return cols;
   });
 }
-
-async function fetchSheet(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r.text();
+async function fetchCSV(path){const r=await fetch(path);if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}
+async function loadFromCSV(){
+  const cfg=loadConfig();
+  try{
+    const text=await fetchCSV(cfg.rotasPath||'rotas.csv');
+    const rows=parseCSV(text).slice(1);
+    S.rotas=rows.filter(r=>r.length>=4&&r[1]).map(r=>({rota:r[1].trim(),rank:r[2].trim().toUpperCase(),name:r[3].trim().toUpperCase()}));
+    S.rotas.forEach(p=>findOrAddRotaPerson(p.rota,p.rank,p.name));
+  }catch{S.rotas=[];console.warn('Could not load rotas.csv');}
+  try{
+    const text=await fetchCSV(cfg.appliancesPath||'appliances.csv');
+    const rows=parseCSV(text).slice(1);
+    S.appliances=rows.filter(r=>r.length>=1&&r[0]).map(r=>({code:r[0].trim().toUpperCase(),desc:(r[1]||'').trim()}));
+  }catch{S.appliances=[];console.warn('Could not load appliances.csv');}
+  try{
+    const text=await fetchCSV(cfg.peoplePath||'people.csv');
+    const rows=parseCSV(text).slice(1);const db=loadPeopleDB();let changed=false;
+    rows.forEach(r=>{
+      if(r.length>=3&&r[0]&&!isNaN(parseInt(r[0],10))){
+        const id=parseInt(r[0],10);
+        if(!db.people.find(p=>p.id===id)){db.people.push({id,rank:r[1].trim().toUpperCase(),name:r[2].trim().toUpperCase()});if(id>=db.nextId)db.nextId=id+1;changed=true;}
+      }
+    });
+    if(changed)savePeopleDB(db);
+  }catch{}
+  renderICButtons();renderApplianceList();renderPeopleList();renderRotaPeopleList();updateValidation();
 }
-
-async function loadFromSheets() {
-  const cfg = loadConfig();
-
-  if (cfg.rotasUrl) {
-    try {
-      const text = await fetchSheet(cfg.rotasUrl);
-      const rows = parseCSV(text).slice(1); // skip header
-      // Expected columns: RotaID, RotaName, Rank, Name
-      S.rotas = rows.filter(r => r.length >= 4 && r[1]).map(r => ({
-        rotaId: r[0].trim(),
-        rota: r[1].trim(),
-        rank: r[2].trim(),
-        name: r[3].trim(),
-      }));
-    } catch (e) {
-      console.warn('Could not load Rotas sheet:', e);
-    }
-  }
-
-  if (cfg.appliancesUrl) {
-    try {
-      const text = await fetchSheet(cfg.appliancesUrl);
-      const rows = parseCSV(text).slice(1);
-      // Expected columns: Code, Description (optional)
-      S.appliances = rows.filter(r => r.length >= 1 && r[0]).map(r => ({
-        code: r[0].trim().toUpperCase(),
-      }));
-      renderApplianceList();
-      const link = el('appliances-sheet-link');
-      link.href = cfg.appliancesUrl;
-      link.classList.remove('hidden');
-    } catch (e) {
-      console.warn('Could not load Appliances sheet:', e);
-    }
-  }
-
-  renderICButtons();
-  renderP3Activator();
-}
-
-async function reloadSheets() {
-  saveConfig();
-  await loadFromSheets();
-}
-
-function renderApplianceList() {
-  const wrap = el('appliance-list');
-  if (!S.appliances.length) {
-    wrap.innerHTML = '<span class="no-names-hint">No appliances loaded.</span>';
-    return;
-  }
-  wrap.innerHTML = S.appliances.map(a =>
-    `<span class="appliance-chip">${a.code}</span>`
-  ).join('');
-}
+async function reloadData(){saveConfig();await loadFromCSV();}
 
 // =============================================
 // IC BUTTONS
 // =============================================
-function renderICButtons() {
-  renderRotaButtons('current-ic-buttons', S.currentRota, 'currentIC');
-  renderRotaButtons('incoming-ic-buttons', S.incomingRota, 'incomingIC');
+function renderICButtons(){
+  renderRotaButtons('current-ic-buttons',S.currentRota,'currentRotaPersonId');
+  renderRotaButtons('incoming-ic-buttons',S.incomingRota,'incomingRotaPersonId');
 }
-
-function renderRotaButtons(containerId, rotaName, stateKey) {
-  const container = el(containerId);
-  const people = S.rotas.filter(r => r.rota === rotaName);
-
-  if (!people.length) {
-    container.innerHTML = `<span class="no-names-hint">No names loaded for ${rotaName}. Check Settings.</span>`;
-    return;
-  }
-
-  container.innerHTML = people.map((p, i) =>
-    `<button class="name-btn ${S[stateKey] && S[stateKey].rank === p.rank && S[stateKey].name === p.name ? 'selected' : ''}"
-       onclick="selectIC('${stateKey}', '${esc(p.rank)}', '${esc(p.name)}')">
-       <span class="rank-tag">${p.rank}</span>${p.name}
-     </button>`
-  ).join('');
+function renderRotaButtons(cid,rotaName,stateKey){
+  const cont=el(cid); const people=S.rotas.filter(r=>r.rota===rotaName);
+  if(!people.length){cont.innerHTML=`<span class="no-names-hint">No names loaded for ${rotaName}. Check Settings.</span>`;return;}
+  cont.innerHTML=people.map(p=>{
+    const pid=findOrAddRotaPerson(p.rota,p.rank,p.name); const sel=S[stateKey]===pid;
+    return `<button class="name-btn ${sel?'selected':''}" onclick="selectIC('${stateKey}',${pid})"><span class="rank-tag">${p.rank}</span>${p.name}</button>`;
+  }).join('');
 }
-
-function selectIC(stateKey, rank, name) {
-  S[stateKey] = { rank, name };
-  renderICButtons();
-  if (S.hasP3) renderP3Activator();
-}
+function selectIC(stateKey,pid){S[stateKey]=pid;renderICButtons();updateValidation();}
 
 // =============================================
 // P3
 // =============================================
-function setP3(hasP3) {
-  S.hasP3 = hasP3;
-  toggle('btn-nop3', !hasP3);
-  toggle('btn-yesp3', hasP3);
-  el('p3-panel').classList.toggle('hidden', !hasP3);
+function setP3(hasP3){
+  S.hasP3=hasP3; toggle('btn-nop3',!hasP3); toggle('btn-yesp3',hasP3);
+  el('p3-panel').classList.toggle('hidden',!hasP3); updateValidation();
 }
-
-function renderP3Activator() {
-  const container = el('p3-activator-buttons');
-  const allPeople = S.rotas.filter(r => r.rota === S.currentRota);
-
-  if (!allPeople.length) {
-    container.innerHTML = `<span class="no-names-hint">Load names in Settings first.</span>`;
-    return;
+function selectP3Preset(mode){
+  el('abtn-opsctr').classList.toggle('selected',mode==='OPS CTR');
+  el('abtn-headops').classList.toggle('selected',mode==='HEAD OPS');
+  el('abtn-others').classList.toggle('selected',mode==='others');
+  if(mode==='others'){
+    el('p3-others-wrap').classList.remove('hidden'); S.p3ActivatorMode='others';
+    const val=el('p3-others-input').value.trim();
+    S.p3PersonId=val?findOrAddPerson('',val):null; el('p3-others-input').focus();
+  }else{
+    el('p3-others-wrap').classList.add('hidden'); S.p3ActivatorMode=mode;
+    S.p3PersonId=findOrAddPerson('',mode);
   }
-
-  container.innerHTML = allPeople.map(p =>
-    `<button class="name-btn ${S.p3Activator && S.p3Activator.rank === p.rank && S.p3Activator.name === p.name ? 'selected' : ''}"
-       onclick="selectP3Activator('${esc(p.rank)}', '${esc(p.name)}')">
-       <span class="rank-tag">${p.rank}</span>${p.name}
-     </button>`
-  ).join('');
+  renderP3ActivatorDisplay(); updateValidation();
 }
-
-function selectP3Activator(rank, name) {
-  S.p3Activator = { rank, name };
-  renderP3Activator();
+function onP3OthersInput(){
+  const val=el('p3-others-input').value.trim().toUpperCase();
+  S.p3PersonId=val?findOrAddPerson('',val):null; renderP3ActivatorDisplay(); updateValidation();
 }
-
-function toggleP3Override(idx) {
-  S.p3Overrides[idx] = !S.p3Overrides[idx];
-  const btn = el('ovr-' + idx);
-  btn.classList.toggle('active', S.p3Overrides[idx]);
-  rebuildDrum('p3-' + idx + '-h', idx);
-  rebuildDrum('p3-' + idx + '-m', idx);
+function renderP3Activator(){
+  ['abtn-opsctr','abtn-headops','abtn-others'].forEach(id=>el(id).classList.remove('selected'));
+  el('p3-others-wrap').classList.add('hidden'); el('p3-others-input').value='';
+  el('p3-activator-current').classList.add('hidden');
+  S.p3ActivatorMode=null; S.p3PersonId=null;
+}
+function renderP3ActivatorDisplay(){
+  const disp=el('p3-activator-current'); const p=getPersonById(S.p3PersonId);
+  if(p){disp.textContent='✓ '+(p.rank?`${p.rank} ${p.name}`:p.name);disp.classList.remove('hidden');}
+  else disp.classList.add('hidden');
 }
 
 // =============================================
 // DRUM PICKER
 // =============================================
-const ITEM_H = 44; // must match --drum-h in CSS
-
-// Returns true if this HHMM value falls within the shift window.
-function isHHMMAllowedInShift(h, m, shiftLabel, override) {
-  if (override) return true;
-  const hhmm = h * 100 + m;
-  if (shiftLabel === 'Day') return hhmm >= 800 && hhmm <= 1800;
-  // Night 1800–0800 inclusive; 0801–1759 are outside
-  return hhmm >= 1800 || hhmm <= 800;
+function getAllowedHours(shiftLabel){
+  if(!shiftLabel) return Array.from({length:24},(_,i)=>i);
+  if(shiftLabel==='Day') return Array.from({length:11},(_,i)=>i+8);
+  return [18,19,20,21,22,23,0,1,2,3,4,5,6,7,8];
 }
-
-// Coarse hour check: is ANY minute at this hour allowed in the shift window?
-function isHourAllowed(h, shiftLabel, override) {
-  if (override) return true;
-  if (shiftLabel === 'Day') return h >= 8 && h <= 18;
-  // Night: hours 18-23 and 0-8 have at least one valid minute
-  return h >= 18 || h <= 8;
+function getDrumHourList(idx){
+  return Array.from({length:24},(_,i)=>i);
 }
+const MINUTES=Array.from({length:60},(_,i)=>i);
 
-function isTimeAllowed(h, m, shiftLabel, override, prevHHMM) {
-  if (!isHHMMAllowedInShift(h, m, shiftLabel, override)) return false;
-  if (prevHHMM === null) return true;
-  const cur = nightOrder(h * 100 + m, shiftLabel);
-  const prev = nightOrder(prevHHMM, shiftLabel);
-  return cur > prev;
-}
-
-function nightOrder(hhmm, shiftLabel) {
-  if (shiftLabel !== 'Night') return hhmm;
-  return hhmm <= 810 ? hhmm + 2400 : hhmm;
-}
-
-function getPrevP3Time(idx) {
-  if (idx === 0) return null;
-  const t = S.p3Times[idx - 1];
-  if (!t) return null;
-  return parseInt(t, 10);
-}
-
-function buildDrumItems(type, drumIdx) {
-  // type: 'h' or 'm'
-  const override = S.p3Overrides[drumIdx];
-  const shiftLabel = S.detectedShiftLabel;
-  const prevHHMM = getPrevP3Time(drumIdx);
-
-  const items = [];
-  const count = type === 'h' ? 24 : 60;
-
-  for (let v = 0; v < count; v++) {
-    let allowed = true;
-    if (type === 'h') {
-      allowed = isHourAllowed(v, shiftLabel, override);
-    } else {
-      const curH = S.drumH['p3-' + drumIdx + '-h'] ?? (shiftLabel === 'Day' ? 8 : 18);
-      allowed = isTimeAllowed(curH, v, shiftLabel, override, prevHHMM);
-    }
-    items.push({ v, allowed });
-  }
-  return items;
-}
-
-function rebuildDrum(fieldId, drumIdx) {
-  const drumEl = el('drum-' + fieldId);
-  if (!drumEl) return;
-
-  const type = fieldId.endsWith('-h') ? 'h' : 'm';
-  const items = buildDrumItems(type, drumIdx);
-
-  // Build track: pad top and bottom with 1 empty item so first/last can center
-  let html = '<div class="drum-track">';
-  html += '<div class="drum-item" style="visibility:hidden">00</div>';
-  items.forEach(({ v, allowed }) => {
-    const label = String(v).padStart(2, '0');
-    html += `<div class="drum-item${allowed ? '' : ' disabled'}" data-value="${v}">${label}</div>`;
-  });
-  html += '<div class="drum-item" style="visibility:hidden">00</div>';
-  html += '</div>';
-  html += '<div class="drum-selector"></div>';
-
-  drumEl.innerHTML = html;
-
-  const track = drumEl.querySelector('.drum-track');
-
-  // Restore selected value (or snap to first allowed)
-  const stateKey = type === 'h' ? 'drumH' : 'drumM';
-  let curVal = S[stateKey][fieldId];
-  if (curVal === undefined) {
-    const firstAllowed = items.find(i => i.allowed);
-    curVal = firstAllowed ? firstAllowed.v : 0;
-    S[stateKey][fieldId] = curVal;
-  }
-
-  // If the saved value is now disabled (e.g. override toggled off), snap to first valid
-  const savedItem = drumEl.querySelector(`.drum-item[data-value="${curVal}"]`);
-  if (savedItem && savedItem.classList.contains('disabled')) {
-    const firstAllowed = items.find(i => i.allowed);
-    if (firstAllowed) {
-      curVal = firstAllowed.v;
-      S[stateKey][fieldId] = curVal;
-      updateP3TimeFromDrums(drumIdx);
+function buildDrums(){
+  for(let idx=0;idx<5;idx++){
+    const c=el(`drum-${idx}`); if(!c) continue;
+    c.innerHTML=`
+      <div class="drum-row">
+        <div class="drum-col">
+          <button class="drum-btn" onclick="stepDrum(${idx},'h',-1)">▲</button>
+          <div class="drum-face" id="df-${idx}-h">
+            <div class="drum-slot ds-prev" id="ds-${idx}-h-prev"></div>
+            <div class="drum-slot ds-cur placeholder" id="ds-${idx}-h-cur">--</div>
+            <div class="drum-slot ds-next" id="ds-${idx}-h-next"></div>
+          </div>
+          <button class="drum-btn" onclick="stepDrum(${idx},'h',1)">▼</button>
+        </div>
+        <span class="drum-colon">:</span>
+        <div class="drum-col">
+          <button class="drum-btn" onclick="stepDrum(${idx},'m',-1)">▲</button>
+          <div class="drum-face" id="df-${idx}-m">
+            <div class="drum-slot ds-prev" id="ds-${idx}-m-prev"></div>
+            <div class="drum-slot ds-cur placeholder" id="ds-${idx}-m-cur">--</div>
+            <div class="drum-slot ds-next" id="ds-${idx}-m-next"></div>
+          </div>
+          <button class="drum-btn" onclick="stepDrum(${idx},'m',1)">▼</button>
+        </div>
+      </div>
+      <button class="timing-disable-btn" id="tdb-${idx}" onclick="toggleBlock(${idx})">🚫 Disable this event</button>`;
+    for(const part of['h','m']){
+      el(`df-${idx}-${part}`).addEventListener('wheel',e=>{
+        e.preventDefault(); stepDrum(idx,part,e.deltaY>0?1:-1);
+      },{passive:false});
     }
   }
-
-  scrollToValue(track, curVal, false);
-
-  let scrollTimer = null;
-  track.addEventListener('scroll', () => {
-    clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(() => onDrumScrollEnd(track, fieldId, drumIdx, type, stateKey), 120);
-  });
 }
 
-function scrollToValue(track, value, smooth) {
-  // Items: index 0 is padding, so actual item at index (value + 1)
-  const targetY = value * ITEM_H; // padding item scrolls it into center
-  track.scrollTo({ top: targetY, behavior: smooth ? 'smooth' : 'instant' });
+function stepDrum(idx,part,dir){
+  if(S.timeBlocked[idx]) return;
+  S.timeAutoSet[idx]=false; S.timeGapDismissed[idx]=false;
+
+  const isH=part==='h'; const list=isH?getDrumHourList(idx):MINUTES;
+  let val=isH?S.timeH[idx]:S.timeM[idx];
+  if(val===null) val=dir>0?list[0]:list[list.length-1];
+  else{ const pos=list.indexOf(val); val=list[((pos<0?0:pos)+dir+list.length)%list.length]; }
+
+  if(isH){S.timeH[idx]=val; if(S.timeM[idx]===null)S.timeM[idx]=0;}
+  else{if(S.timeH[idx]===null)S.timeH[idx]=getDrumHourList(idx)[0]; S.timeM[idx]=val;}
+
+  const face=el(`df-${idx}-${part}`);
+  const ac=dir<0?'spin-up':'spin-down';
+  face.classList.remove('spin-up','spin-down'); void face.offsetWidth;
+  face.classList.add(ac); setTimeout(()=>face.classList.remove(ac),120);
+
+  renderDrum(idx); tryCommitTime(idx);
 }
 
-function onDrumScrollEnd(track, fieldId, drumIdx, type, stateKey) {
-  const idx = Math.round(track.scrollTop / ITEM_H);
-  // Use data-value attribute for unambiguous lookup (avoids padding sentinel items)
-  const item = track.querySelector(`.drum-item[data-value="${idx}"]`);
-  if (!item) return;
-
-  const v = parseInt(item.dataset.value, 10);
-
-  if (item.classList.contains('disabled')) {
-    // Snap back to currently saved valid value
-    const cur = S[stateKey][fieldId] ?? 0;
-    scrollToValue(track, cur, true);
-    return;
-  }
-
-  S[stateKey][fieldId] = v;
-  updateP3TimeFromDrums(drumIdx);
-
-  // Hour change may invalidate minutes for the same drum
-  if (type === 'h') rebuildDrum('p3-' + drumIdx + '-m', drumIdx);
-
-  // All subsequent drums may have new minimum constraints
-  for (let i = drumIdx + 1; i < 5; i++) {
-    rebuildDrum('p3-' + i + '-h', i);
-    rebuildDrum('p3-' + i + '-m', i);
+function renderDrum(idx){
+  const c=el(`drum-${idx}`);
+  if(c) c.classList.toggle('is-blocked',!!S.timeBlocked[idx]);
+  renderDrumPart(idx,'h');renderDrumPart(idx,'m');
+}
+function renderDrumPart(idx,part){
+  const isH=part==='h'; const val=isH?S.timeH[idx]:S.timeM[idx];
+  const list=isH?getDrumHourList(idx):MINUTES;
+  const pE=el(`ds-${idx}-${part}-prev`),cE=el(`ds-${idx}-${part}-cur`),nE=el(`ds-${idx}-${part}-next`);
+  if(!pE||!cE||!nE) return;
+  if(val===null){pE.textContent='';cE.textContent='--';cE.classList.add('placeholder');nE.textContent='';}
+  else{
+    const pos=list.indexOf(val); const sp=pos<0?0:pos;
+    pE.textContent=String(list[(sp-1+list.length)%list.length]).padStart(2,'0');
+    cE.textContent=String(val).padStart(2,'0'); cE.classList.remove('placeholder');
+    nE.textContent=String(list[(sp+1)%list.length]).padStart(2,'0');
   }
 }
 
-function updateP3TimeFromDrums(drumIdx) {
-  const h = S.drumH['p3-' + drumIdx + '-h'] ?? 0;
-  const m = S.drumM['p3-' + drumIdx + '-m'] ?? 0;
-  S.p3Times[drumIdx] = String(h).padStart(2, '0') + String(m).padStart(2, '0');
+function refreshDrums(){
+  S.timeH=            [null,  null,  null,  null,  null];
+  S.timeM=            [null,  null,  null,  null,  null];
+  S.timeAutoSet=      [false, false, false, false, false];
+  S.timeBlocked=      [false, false, false, false, false];
+  S.timeGapDismissed= [false, false, false, false, false];
+  S.p3Times=          ['','','','',''];
+  for(let i=0;i<5;i++){renderDrum(i);renderTimingFeedback(i);renderDisableButton(i);}
 }
 
-function refreshDrums() {
-  // Reset all drum states when shift changes
-  S.drumH = {};
-  S.drumM = {};
-  S.p3Times = ['', '', '', '', ''];
-  for (let i = 0; i < 5; i++) {
-    rebuildDrum('p3-' + i + '-h', i);
-    rebuildDrum('p3-' + i + '-m', i);
+// =============================================
+// TIMING VALIDATION & COMMIT
+// =============================================
+function nightOrder(hhmm,shiftLabel){
+  if(shiftLabel!=='Night') return hhmm; return hhmm<=810?hhmm+2400:hhmm;
+}
+function isInShiftBounds(h,m,shiftLabel){
+  if(!shiftLabel) return true; const hhmm=h*100+m;
+  if(shiftLabel==='Day') return hhmm>=800&&hhmm<=1800;
+  return hhmm>=1800||hhmm<=800;
+}
+function getPrevP3Time(idx){
+  for(let i=idx-1;i>=0;i--){
+    if(!S.timeBlocked[i]&&S.p3Times[i]&&S.p3Times[i].length===4) return parseInt(S.p3Times[i],10);
+  }
+  return null;
+}
+
+function tryCommitTime(idx){
+  const h=S.timeH[idx],m=S.timeM[idx];
+  if(h===null||m===null||S.timeBlocked[idx]) return;
+  commitTimeNow(idx); renderTimingFeedback(idx);
+}
+
+function commitTimeNow(idx){
+  S.p3Times[idx]=String(S.timeH[idx]).padStart(2,'0')+String(S.timeM[idx]).padStart(2,'0');
+  renderDrum(idx); autoAdvanceFrom(idx); updateValidation();
+}
+
+function autoAdvanceFrom(fromIdx){
+  const sl=S.detectedShiftLabel;
+  let rH=S.timeH[fromIdx],rM=S.timeM[fromIdx];
+  if(rH===null||rM===null) return;
+  for(let i=fromIdx+1;i<5;i++){
+    if(S.timeBlocked[i]) continue;
+    let ah=rH,am=rM+1; if(am>=60){am=0;ah=(ah+1)%24;}
+    if(S.timeH[i]===null||S.timeAutoSet[i]){
+      S.timeH[i]=ah;S.timeM[i]=am;
+      S.p3Times[i]=String(ah).padStart(2,'0')+String(am).padStart(2,'0');
+      S.timeAutoSet[i]=true;S.timeGapDismissed[i]=false;
+      renderDrum(i);renderTimingFeedback(i);rH=ah;rM=am;
+    }else{
+      const rOrd=nightOrder(rH*100+rM,sl),tOrd=nightOrder(S.timeH[i]*100+S.timeM[i],sl);
+      if(tOrd<=rOrd){
+        S.timeH[i]=ah;S.timeM[i]=am;
+        S.p3Times[i]=String(ah).padStart(2,'0')+String(am).padStart(2,'0');
+        S.timeAutoSet[i]=true;S.timeGapDismissed[i]=false;
+        renderDrum(i);renderTimingFeedback(i);rH=ah;rM=am;
+      }else{rH=S.timeH[i];rM=S.timeM[i];}
+    }
+  }
+}
+
+function clearTimesFrom(idx){
+  for(let i=idx;i<5;i++){
+    S.timeH[i]=null;S.timeM[i]=null;S.timeAutoSet[i]=false;
+    S.timeBlocked[i]=false;S.timeGapDismissed[i]=false;
+    S.p3Times[i]=''; renderDrum(i); renderTimingFeedback(i); renderDisableButton(i);
+  }
+}
+
+// ---- Inline timing feedback (right of drum) ----
+function renderTimingFeedback(idx){
+  const tf=el(`tf-${idx}`); if(!tf) return;
+  if(S.timeBlocked[idx]||S.timeH[idx]===null||S.timeM[idx]===null){tf.innerHTML='';return;}
+  const caution=getCautionForSlot(idx);
+  if(!caution){tf.innerHTML='';return;}
+  const slLabel=(S.detectedShiftLabel||'shift').toLowerCase();
+  const win=slLabel==='night'?'18:00 – 08:00':'08:00 – 18:00';
+  if(caution==='earlier'){
+    tf.innerHTML=`<div class="tf-hard-err"><span class="tf-x">✕</span><div>This timing is before the previous P3 event. Scroll to a later time, or disable this event below if it did not occur during this shift.</div></div>`;
+  }else if(caution==='oob'){
+    tf.innerHTML=`<div class="caution-box">
+      <span class="caution-icon">⚠</span>
+      <div class="caution-text">
+        <span class="caution-msg">This timing falls outside the ${slLabel} shift window (${win}). If this event did not occur during this shift, you can disable it below.</span>
+        <button class="caution-dismiss-btn" onclick="blockEvent(${idx})">🚫 Disable this event</button>
+      </div></div>`;
+  }else if(caution==='gap'){
+    tf.innerHTML=`<div class="caution-box">
+      <span class="caution-icon">⚠</span>
+      <div class="caution-text">
+        <span class="caution-msg">This timing is more than 2 hours after the previous P3 event. Is this correct?</span>
+        <button class="caution-dismiss-btn" onclick="dismissGapCaution(${idx})">Yes, that's correct</button>
+      </div></div>`;
+  }
+}
+function dismissGapCaution(idx){
+  S.timeGapDismissed[idx]=true; renderTimingFeedback(idx); updateValidation();
+}
+
+// =============================================
+// CAUTION LOGIC
+// =============================================
+function ordToMins(ord){return Math.floor(ord/100)*60+ord%100;}
+
+function getCautionForSlot(idx){
+  if(S.timeBlocked[idx]) return null;
+  const h=S.timeH[idx],m=S.timeM[idx];
+  if(h===null||m===null) return null;
+  const sl=S.detectedShiftLabel;
+  const prevHHMM=getPrevP3Time(idx);
+
+  // Priority 1 — earlier than previous non-blocked event (non-dismissible)
+  if(prevHHMM!==null){
+    const tOrd=nightOrder(h*100+m,sl),pOrd=nightOrder(prevHHMM,sl);
+    if(tOrd<=pOrd) return 'earlier';
+  }
+
+  // Priority 2 — outside shift window (non-dismissible, "disable" shortcut only)
+  if(!isInShiftBounds(h,m,sl)) return 'oob';
+
+  // Priority 3 — gap > 2 hours from previous (dismissible)
+  if(prevHHMM!==null&&!S.timeGapDismissed[idx]){
+    const tOrd=nightOrder(h*100+m,sl),pOrd=nightOrder(prevHHMM,sl);
+    if(ordToMins(tOrd)-ordToMins(pOrd)>120) return 'gap';
+  }
+
+  return null;
+}
+
+// =============================================
+// BLOCK / DISABLE EVENTS
+// =============================================
+function validateBlockPattern(){
+  const bi=S.timeBlocked.map((b,i)=>b?i:-1).filter(i=>i>=0);
+  if(bi.length===0) return null;
+  if(bi.length===5) return 'all';
+  // Must be contiguous
+  for(let i=1;i<bi.length;i++) if(bi[i]!==bi[i-1]+1) return 'noncontiguous';
+  // Must start at index 0 or end at index 4
+  if(bi[0]!==0&&bi[bi.length-1]!==4) return 'middle';
+  return null;
+}
+
+function blockEvent(idx){
+  S.timeBlocked[idx]=true;
+  S.timeH[idx]=null;S.timeM[idx]=null;S.p3Times[idx]='';
+  S.timeAutoSet[idx]=false;S.timeGapDismissed[idx]=false;
+  renderDrum(idx);renderDisableButton(idx);renderTimingFeedback(idx);
+  // Re-evaluate neighbours — their "previous time" lookup may have changed
+  for(let i=0;i<5;i++) if(i!==idx) renderTimingFeedback(i);
+  updateValidation();
+}
+
+function unblockEvent(idx){
+  S.timeBlocked[idx]=false;
+  renderDrum(idx);renderDisableButton(idx);renderTimingFeedback(idx);
+  for(let i=0;i<5;i++) if(i!==idx) renderTimingFeedback(i);
+  updateValidation();
+}
+
+function toggleBlock(idx){
+  if(S.timeBlocked[idx]) unblockEvent(idx); else blockEvent(idx);
+}
+
+function renderDisableButton(idx){
+  const btn=el(`tdb-${idx}`); if(!btn) return;
+  if(S.timeBlocked[idx]){
+    btn.textContent='↩ Re-enable this event';
+    btn.classList.add('is-reenable');
+  }else{
+    btn.textContent='🚫 Disable this event';
+    btn.classList.remove('is-reenable');
   }
 }
 
 // =============================================
-// REDCON PARSER
+// REDCON PARSER & CAUTION
 // =============================================
-function parseRedcon() {
-  const text = el('redcon-paste').value;
-  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+function parseRedcon(){
+  const text=el('redcon-paste').value;
+  S.redconCautionDismissed=false;
 
-  const A4_RE = /^A4\d{2}$/i;
-  const found = {};
-
-  for (let i = 0; i < lines.length; i++) {
-    const code = lines[i].trim().toUpperCase();
-    if (!A4_RE.test(code)) continue;
-
-    let rank = '', name = '';
-    for (let j = i + 1; j < lines.length && j <= i + 5; j++) {
-      const t = lines[j].trim();
-      if (!t) continue;
-      if (!rank) { rank = t; continue; }
-      if (!name) { name = t; break; }
-    }
-    found[code] = { rank, name };
+  if(!text.trim()){
+    S.redconData=[]; S.redconCautionState='empty';
+    renderRedconTable(); renderRedconCaution(); updateValidation(); return;
   }
 
-  // Merge with master appliance list
-  const masterCodes = S.appliances.length
-    ? S.appliances.map(a => a.code)
-    : Object.keys(found);
-
-  S.redconData = masterCodes.map(code => ({
-    code,
-    rank: found[code]?.rank || '',
-    name: found[code]?.name || '',
-    matched: !!found[code],
-  }));
-
-  // Also add any parsed codes not in master list
-  Object.keys(found).forEach(code => {
-    if (!S.redconData.find(r => r.code === code)) {
-      S.redconData.push({ code, rank: found[code].rank, name: found[code].name, matched: true });
+  const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  const A4_RE=/^A4\d{2}$/i; const found={};
+  for(let i=0;i<lines.length;i++){
+    const code=lines[i].trim().toUpperCase(); if(!A4_RE.test(code)) continue;
+    let rank='',name='';
+    for(let j=i+1;j<lines.length&&j<=i+5;j++){
+      const t=lines[j].trim(); if(!t) continue;
+      if(!rank){rank=t.toUpperCase();continue;} if(!name){name=t.toUpperCase();break;}
+    }
+    found[code]={rank,name};
+  }
+  const mc=S.appliances.length?S.appliances.map(a=>a.code):Object.keys(found);
+  S.redconData=mc.map(code=>{
+    const f=found[code];
+    if(f&&f.rank&&f.name) return{code,personId:findOrAddPerson(f.rank,f.name),rank:f.rank,name:f.name,matched:true};
+    return{code,personId:null,rank:'',name:'',matched:false};
+  });
+  Object.keys(found).forEach(code=>{
+    if(!S.redconData.find(r=>r.code===code)){
+      const f=found[code];
+      S.redconData.push({code,personId:(f.rank&&f.name)?findOrAddPerson(f.rank,f.name):null,rank:f.rank,name:f.name,matched:true});
     }
   });
-
-  renderRedconTable();
+  S.redconCautionState=S.redconData.some(r=>r.personId)?null:'nonames';
+  renderRedconTable(); renderPeopleList(); renderRedconCaution(); updateValidation();
 }
 
-function renderRedconTable() {
-  const wrap = el('redcon-results');
-  if (!S.redconData.length) {
-    wrap.classList.add('hidden');
-    return;
-  }
+function updateRedconCautionState(){
+  if(S.detectedShiftLabel!=='Night'){S.redconCautionState=null;}
+  else if(!el('redcon-paste').value.trim()){S.redconCautionState='empty';}
+  renderRedconCaution();
+}
 
-  const rows = S.redconData.map(r =>
-    `<tr class="${r.matched ? 'matched' : 'unmatched'}">
-       <td class="code">${r.code}</td>
-       <td>${r.rank || '—'}</td>
-       <td>${r.name || '—'}</td>
-     </tr>`
-  ).join('');
+function renderRedconCaution(){
+  const eEl=el('redcon-caution-empty'), nEl=el('redcon-caution-nonames');
+  if(!eEl||!nEl) return;
+  eEl.classList.toggle('hidden', !(S.redconCautionState==='empty'  &&!S.redconCautionDismissed));
+  nEl.classList.toggle('hidden', !(S.redconCautionState==='nonames'&&!S.redconCautionDismissed));
+}
 
-  wrap.innerHTML = `
-    <table class="redcon-table">
-      <thead><tr><th>Code</th><th>Rank</th><th>Name</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+function dismissRedconCaution(){
+  S.redconCautionDismissed=true; renderRedconCaution(); updateValidation();
+}
+
+function renderRedconTable(){
+  const wrap=el('redcon-results');
+  if(!S.redconData.length){wrap.classList.add('hidden');return;}
+  wrap.innerHTML=`<table class="redcon-table"><thead><tr><th>Code</th><th>Rank</th><th>Name</th></tr></thead><tbody>
+    ${S.redconData.map(r=>`<tr class="${r.matched?'matched':'unmatched'}">
+      <td class="code">${r.code}</td><td>${r.rank||'—'}</td><td>${r.name||'—'}</td></tr>`).join('')}
+  </tbody></table>`;
   wrap.classList.remove('hidden');
 }
 
 // =============================================
-// GENERATE CLIPBOARD STRING
+// VALIDATION
 // =============================================
-function generate() {
-  const errors = validate();
-  if (errors.length) {
-    showMsg(errors.join('\n'), 'error');
-    return;
+const TIMING_LABELS=['Activated','Left Division','Arrived','Left Location','Reached Div.'];
+
+function validate(){
+  const errs=[];
+  if(!S.currentRotaPersonId)  errs.push({section:'current-ic', msg:'Select the Current IC.'});
+  if(!S.incomingRotaPersonId) errs.push({section:'incoming-ic',msg:'Select the Incoming IC.'});
+  if(S.hasP3){
+    if(!S.p3PersonId) errs.push({section:'p3',msg:'Select who activated P3.'});
+    const bp=validateBlockPattern();
+    if(bp==='all')
+      errs.push({section:'p3',msg:'All P3 events are disabled. Re-enable at least one, or turn off P3 Turnout.'});
+    else if(bp)
+      errs.push({section:'p3',msg:'Invalid disable pattern — disabled events must be consecutive and start from the first timing or end at the last.'});
+    for(let i=0;i<5;i++){
+      if(S.timeBlocked[i]) continue;
+      const lbl=`"${TIMING_LABELS[i]}"`;
+      if(!S.p3Times[i])
+        errs.push({section:'p3',msg:`P3 timing ${lbl}: not set yet.`});
+      else{
+        const c=getCautionForSlot(i);
+        if(c==='earlier')
+          errs.push({section:'p3',msg:`P3 timing ${lbl}: must be after the previous timing.`});
+        else if(c==='oob')
+          errs.push({section:'p3',msg:`P3 timing ${lbl}: outside shift window — disable it if it did not occur this shift.`});
+        else if(c==='gap')
+          errs.push({section:'p3',msg:`P3 timing ${lbl}: gap over 2 hours — confirm or dismiss.`});
+      }
+    }
   }
-
-  const shiftType = S.shiftMode === 'auto' ? 'AUTO' : 'OVERRIDE';
-  const shiftSpec = S.shiftMode === 'override'
-    ? fmtDate(S.overrideDate) + '-' + S.overrideShiftType
-    : '';
-
-  const parts = [
-    'OPSLOG',
-    '1',
-    shiftType,
-    shiftSpec,
-    S.currentIC.rank,
-    S.currentIC.name,
-    S.incomingIC.rank,
-    S.incomingIC.name,
-    S.hasP3 ? 'YES' : 'NO',
-    S.hasP3 ? S.p3Activator.rank : '',
-    S.hasP3 ? S.p3Activator.name : '',
-    S.hasP3 ? S.p3Times[0] : '',
-    S.hasP3 ? (S.p3Overrides[0] ? '1' : '0') : '',
-    S.hasP3 ? S.p3Times[1] : '',
-    S.hasP3 ? (S.p3Overrides[1] ? '1' : '0') : '',
-    S.hasP3 ? S.p3Times[2] : '',
-    S.hasP3 ? (S.p3Overrides[2] ? '1' : '0') : '',
-    S.hasP3 ? S.p3Times[3] : '',
-    S.hasP3 ? (S.p3Overrides[3] ? '1' : '0') : '',
-    S.hasP3 ? S.p3Times[4] : '',
-    S.hasP3 ? (S.p3Overrides[4] ? '1' : '0') : '',
-  ];
-
-  // REDCON
-  const redconFiltered = S.redconData.filter(r => r.rank && r.name);
-  parts.push(String(redconFiltered.length));
-  redconFiltered.forEach(r => parts.push(r.code, r.rank, r.name));
-
-  const code = parts.join('|');
-
-  navigator.clipboard.writeText(code).then(() => {
-    showMsg('✓ Code copied to clipboard.\n\nGo to Excel and run GenerateFromClipboard (Alt+F8).', 'success');
-    el('generate-label').textContent = 'Copied!';
-    setTimeout(() => { el('generate-label').textContent = 'Copy Code to Clipboard'; }, 3000);
-  }).catch(() => {
-    // Fallback for browsers that block clipboard API
-    prompt('Copy this code manually (Ctrl+C):', code);
-  });
-}
-
-function validate() {
-  const errs = [];
-  if (!S.currentIC)  errs.push('• Select the Current IC.');
-  if (!S.incomingIC) errs.push('• Select the Incoming IC.');
-  if (S.hasP3) {
-    if (!S.p3Activator) errs.push('• Select who activated P3.');
-    S.p3Times.forEach((t, i) => {
-      if (!t) errs.push(`• Enter P3 timing ${i + 1}.`);
-    });
-  }
-  if (S.detectedShiftLabel === 'Night') {
-    const matched = S.redconData.filter(r => r.rank && r.name);
-    if (!matched.length) errs.push('• Paste REDCON data for night shift.');
-  }
+  if(S.detectedShiftLabel==='Night'&&S.redconCautionState!==null&&!S.redconCautionDismissed)
+    errs.push({section:'redcon',msg:'REDCON: '+( S.redconCautionState==='empty'?'no data entered — paste the REDCON email or click "Yes, proceed".':'no alpha names found — paste valid data or click "Yes, proceed".')});
   return errs;
 }
 
+function updateValidation(){
+  const errs=validate();
+  ['current-ic','incoming-ic','p3'].forEach(sec=>{
+    const has=errs.some(e=>e.section===sec);
+    el('err-'+sec)?.classList.toggle('hidden',!has);
+    el('section-'+sec)?.classList.toggle('has-error',has);
+  });
+  if(S.detectedShiftLabel==='Night'){
+    const has=errs.some(e=>e.section==='redcon');
+    el('err-redcon')?.classList.toggle('hidden',!has);
+    el('section-redcon')?.classList.toggle('has-error',has);
+  }else{el('err-redcon')?.classList.add('hidden');el('section-redcon')?.classList.remove('has-error');}
+  // Button: visually greyed but always clickable
+  el('generate-btn').classList.toggle('has-errors',errs.length>0);
+}
+
 // =============================================
-// SETTINGS TOGGLE
+// ALERT SYSTEM
 // =============================================
-function toggleSettings() {
-  const panel = el('settings-panel');
-  const chevron = el('settings-chevron');
-  const open = panel.classList.toggle('hidden') === false;
-  chevron.textContent = open ? '▾' : '▸';
+function showAlert({type='error',title,bodyHTML,buttons=[],dismissAnywhere=false,resetOnClose=false,dismissHint=null}){
+  el('modal-box').className='modal-box alert-'+type;
+  el('modal-title').innerHTML=title; el('modal-body').innerHTML=bodyHTML;
+  const acts=el('modal-actions'); acts.innerHTML='';
+  buttons.forEach(btn=>{
+    const b=document.createElement('button'); b.textContent=btn.label;
+    b.onclick=()=>{closeModal();if(btn.cb)btn.cb();}; acts.appendChild(b);
+  });
+  const hint=el('modal-dismiss-hint');
+  if(dismissHint){hint.textContent=dismissHint;hint.classList.remove('hidden');}
+  else hint.classList.add('hidden');
+  const ov=el('modal-overlay');
+  if(dismissAnywhere) ov.dataset.dismissAnywhere='1'; else delete ov.dataset.dismissAnywhere;
+  if(resetOnClose)    ov.dataset.resetOnClose='1';    else delete ov.dataset.resetOnClose;
+  ov.classList.remove('hidden');
+}
+
+function closeModal(){
+  const ov=el('modal-overlay'); ov.classList.add('hidden');
+  el('modal-dismiss-hint').classList.add('hidden');
+  el('modal-box').className='modal-box';
+  const sr=ov.dataset.resetOnClose==='1';
+  delete ov.dataset.dismissAnywhere; delete ov.dataset.resetOnClose;
+  if(sr) resetAllState();
+}
+
+function resetAllState(){
+  S.hasP3=false;S.p3PersonId=null;S.p3ActivatorMode=null;
+  S.currentRotaPersonId=null;S.incomingRotaPersonId=null;
+  S.redconData=[];S.redconCautionState=null;S.redconCautionDismissed=false;
+  setP3(false); el('redcon-paste').value='';
+  renderRedconTable(); renderRedconCaution(); renderP3Activator(); refreshDrums();
+  setShiftMode('auto');
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  el('modal-overlay').addEventListener('click',e=>{
+    const ov=el('modal-overlay');
+    if(e.target===ov||ov.dataset.dismissAnywhere==='1') closeModal();
+  });
+});
+
+// =============================================
+// GENERATE
+// =============================================
+function generate(){
+  const errs=validate();
+  if(errs.length>0){
+    showAlert({
+      type:'error',
+      title:'<span class="alert-err-heading">⚠ Missing or invalid fields</span>',
+      bodyHTML:'<ul class="alert-err-list">'+errs.map(e=>`<li>${e.msg}</li>`).join('')+'</ul>',
+      buttons:[{label:'Edit',cb:null}],
+    });
+    return;
+  }
+  proceedGenerate();
+}
+
+function proceedGenerate(){
+  const code=buildClipboardString();
+  navigator.clipboard.writeText(code).then(()=>{
+    showAlert({
+      type:'success',
+      title:'✓ Code Copied!',
+      bodyHTML:'Open Excel and run <strong>GenerateFromClipboard</strong> via <strong>Alt+F8</strong>.',
+      buttons:[],dismissAnywhere:true,resetOnClose:true,
+      dismissHint:'Click anywhere to dismiss',
+    });
+  }).catch(()=>{
+    prompt('Copy this code manually (Ctrl+C):',code);
+    showAlert({
+      type:'success',
+      title:'✓ Code Ready',
+      bodyHTML:'Copy the code from the prompt, then open Excel and run <strong>GenerateFromClipboard</strong> via <strong>Alt+F8</strong>.',
+      buttons:[],dismissAnywhere:true,resetOnClose:true,
+      dismissHint:'Click anywhere to dismiss',
+    });
+  });
+}
+
+function buildClipboardString(){
+  const st=S.shiftMode==='auto'?'AUTO':'OVERRIDE';
+  const ss=S.shiftMode==='override'?fmtDate(S.overrideDate)+'-'+S.overrideShiftType:'';
+  const p3t=S.hasP3?[0,1,2,3,4].map(i=>S.timeBlocked[i]?'BLOCKED':(S.p3Times[i]||'')):['','','','',''];
+  const parts=['OPSLOG','2',st,ss,String(S.currentRotaPersonId),String(S.incomingRotaPersonId),
+    S.hasP3?'YES':'NO',S.hasP3?String(S.p3PersonId):'',
+    p3t[0],p3t[1],p3t[2],p3t[3],p3t[4]];
+  const rf=S.redconData.filter(r=>r.personId);
+  parts.push(String(rf.length)); rf.forEach(r=>parts.push(r.code,String(r.personId)));
+  const uPIds=new Set(); if(S.hasP3&&S.p3PersonId!=null)uPIds.add(S.p3PersonId);
+  rf.forEach(r=>{if(r.personId!=null)uPIds.add(r.personId);});
+  const pDB=loadPeopleDB(); const uP=[...uPIds].map(id=>pDB.people.find(p=>p.id===id)).filter(Boolean);
+  parts.push('PEOPLE',String(uP.length)); uP.forEach(p=>parts.push(String(p.id),p.rank||'',p.name||''));
+  const uRIds=new Set([S.currentRotaPersonId,S.incomingRotaPersonId].filter(id=>id!=null));
+  const rDB=loadRotaPeopleDB(); const uRP=[...uRIds].map(id=>rDB.people.find(p=>p.id===id)).filter(Boolean);
+  parts.push('ROTA_PEOPLE',String(uRP.length)); uRP.forEach(p=>parts.push(String(p.id),p.rota||'',p.rank||'',p.name||''));
+  return parts.join('|');
+}
+
+// =============================================
+// SETTINGS
+// =============================================
+function toggleSettings(){
+  const panel=el('settings-panel'),chevron=el('settings-chevron');
+  const no=!panel.classList.contains('hidden');
+  panel.classList.toggle('hidden',no); chevron.textContent=no?'▸':'▾';
+}
+function renderApplianceList(){
+  const wrap=el('appliance-list');
+  if(!S.appliances.length){wrap.innerHTML='<span class="no-names-hint">No appliances loaded.</span>';return;}
+  wrap.innerHTML=S.appliances.map(a=>`<span class="appliance-chip" title="${esc(a.desc)}">${a.code}</span>`).join('');
+}
+function renderPeopleList(){
+  const wrap=el('people-list'); const db=loadPeopleDB();
+  if(!db.people.length){wrap.innerHTML='<span class="no-names-hint">No alpha manning people yet.</span>';return;}
+  wrap.innerHTML=db.people.map(p=>`<div class="person-row"><span class="pid">#${p.id}</span><span class="prank">${p.rank||'—'}</span><span class="pname">${p.name}</span></div>`).join('');
+}
+function renderRotaPeopleList(){
+  const wrap=el('rota-people-list'); if(!wrap) return; const db=loadRotaPeopleDB();
+  if(!db.people.length){wrap.innerHTML='<span class="no-names-hint">No rota members loaded yet.</span>';return;}
+  wrap.innerHTML=db.people.map(p=>`<div class="person-row"><span class="pid">#${p.id}</span><span class="prank">${p.rank||'—'}</span><span class="pname">${p.name} <span style="color:var(--text-3);font-size:11px">(${p.rota})</span></span></div>`).join('');
 }
 
 // =============================================
 // UTILS
 // =============================================
-function el(id) { return document.getElementById(id); }
-
-function toggle(id, active) {
-  el(id).classList.toggle('active', active);
-}
-
-function esc(s) { return s.replace(/'/g, "\\'"); }
-
-function fmtDate(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function showMsg(text, type) {
-  const msg = el('generate-msg');
-  msg.textContent = text;
-  msg.className = 'generate-msg ' + type;
-  msg.classList.remove('hidden');
-}
+function el(id){return document.getElementById(id);}
+function toggle(id,active){el(id).classList.toggle('active',active);}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function fmtDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 
 // =============================================
 // INIT
 // =============================================
-async function init() {
-  // Load saved config into fields
-  const cfg = loadConfig();
-  if (cfg.rotasUrl)      el('cfg-rotas-url').value      = cfg.rotasUrl;
-  if (cfg.appliancesUrl) el('cfg-appliances-url').value = cfg.appliancesUrl;
-
-  // Detect shift
-  const r = computeShift(new Date());
-  applyShiftResult(r);
-
-  // Init calendar (hidden until override selected)
+async function init(){
+  const cfg=loadConfig();
+  if(cfg.rotasPath)      el('cfg-rotas-path').value=cfg.rotasPath;
+  if(cfg.appliancesPath) el('cfg-appliances-path').value=cfg.appliancesPath;
+  if(cfg.peoplePath)     el('cfg-people-path').value=cfg.peoplePath;
+  buildDrums();
+  applyShiftResult(computeShift(new Date()));
   initCalendar();
-
-  // Load sheets
-  await loadFromSheets();
-
-  // Build drums
-  refreshDrums();
+  await loadFromCSV();
+  renderPeopleList(); renderRotaPeopleList(); updateValidation();
 }
-
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded',init);

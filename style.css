@@ -16,8 +16,19 @@
   --success: #34c759;
   --warn: #ff9500;
   --p3-red: #ff3b30;
-  --badge-day: #ff9500;
-  --badge-night: #5e5ce6;
+  /* Rota colours: 1=orange  2=blue  3=green */
+  --rota-1: #ff9500;
+  --rota-2: #007aff;
+  --rota-3: #34c759;
+  --rota-1-bg: color-mix(in srgb,#ff9500 12%,var(--surface));
+  --rota-2-bg: color-mix(in srgb,#007aff 12%,var(--surface));
+  --rota-3-bg: color-mix(in srgb,#34c759 12%,var(--surface));
+  /* Station colours (distinct from rota colours) */
+  --stn-41: #8e44ad;   /* purple    */
+  --stn-42: #148f77;   /* teal      */
+  --stn-43: #cb4335;   /* red       */
+  --stn-44: #b7950b;   /* gold      */
+  --stn-45: #1a5276;   /* navy      */
   --radius: 14px;
   --radius-sm: 10px;
   --shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
@@ -192,8 +203,9 @@ h1 {
   transition: background var(--transition), color var(--transition);
 }
 
-.shift-badge.day   { background: var(--badge-day);   color: #fff; }
-.shift-badge.night { background: var(--badge-night); color: #fff; }
+.shift-badge.rota-badge-1 { background: var(--rota-1); color: #fff; }
+.shift-badge.rota-badge-2 { background: var(--rota-2); color: #fff; }
+.shift-badge.rota-badge-3 { background: var(--rota-3); color: #fff; }
 
 /* =============================================
    MAIN GRID — two-column landscape layout
@@ -411,14 +423,16 @@ h1 {
 }
 
 .rota-chip {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-2);
-  background: var(--surface-2);
+  font-size: 14px;
+  font-weight: 600;
   border-radius: 20px;
-  padding: 4px 12px;
+  padding: 5px 14px;
+  border: 1.5px solid transparent;
 }
-.rota-chip strong { color: var(--text); }
+.rota-chip.rc-1 { background: var(--rota-1-bg); color: var(--rota-1); border-color: color-mix(in srgb,var(--rota-1) 30%,transparent); }
+.rota-chip.rc-2 { background: var(--rota-2-bg); color: var(--rota-2); border-color: color-mix(in srgb,var(--rota-2) 30%,transparent); }
+.rota-chip.rc-3 { background: var(--rota-3-bg); color: var(--rota-3); border-color: color-mix(in srgb,var(--rota-3) 30%,transparent); }
+.rota-chip strong { font-weight: 800; }
 
 /* =============================================
    IC NAME BUTTONS
@@ -1066,9 +1080,23 @@ h1 {
   flex-shrink: 0;
   text-transform: uppercase;
 }
-.re-r1 { background: color-mix(in srgb,#007aff 15%,var(--surface)); color:#007aff; }
-.re-r2 { background: color-mix(in srgb,#34c759 15%,var(--surface)); color:#34c759; }
-.re-r3 { background: color-mix(in srgb,#ff9500 15%,var(--surface)); color:#ff9500; }
+.re-r1 { background: var(--rota-1-bg); color: var(--rota-1); }
+.re-r2 { background: var(--rota-2-bg); color: var(--rota-2); }
+.re-r3 { background: var(--rota-3-bg); color: var(--rota-3); }
+
+/* IC section — tinted by current/incoming rota */
+#section-current-ic[data-rota="1"],
+#section-incoming-ic[data-rota="1"] { border-top: 3px solid var(--rota-1); }
+#section-current-ic[data-rota="2"],
+#section-incoming-ic[data-rota="2"] { border-top: 3px solid var(--rota-2); }
+#section-current-ic[data-rota="3"],
+#section-incoming-ic[data-rota="3"] { border-top: 3px solid var(--rota-3); }
+#section-current-ic[data-rota="1"] .section-head h2,
+#section-incoming-ic[data-rota="1"] .section-head h2 { color: var(--rota-1); }
+#section-current-ic[data-rota="2"] .section-head h2,
+#section-incoming-ic[data-rota="2"] .section-head h2 { color: var(--rota-2); }
+#section-current-ic[data-rota="3"] .section-head h2,
+#section-incoming-ic[data-rota="3"] .section-head h2 { color: var(--rota-3); }
 .rota-entry-rank { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; min-width: 36px; }
 .rota-entry-name { flex: 1; font-weight: 500; color: var(--text); }
 
@@ -1165,3 +1193,86 @@ h1 {
 }
 .settings-import-box:focus { outline: none; border-color: var(--accent); }
 .settings-import-block .secondary-btn { margin-left: 12px; }
+
+/* =============================================
+   SETTINGS TABS (rotas & STNs)
+   ============================================= */
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.settings-tab {
+  padding: 5px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.settings-tab:hover { border-color: currentColor; }
+
+/* Rota tabs */
+.settings-tab.rota-tab-1       { color: var(--rota-1); }
+.settings-tab.rota-tab-1.active{ background: var(--rota-1-bg); border-color: var(--rota-1); }
+.settings-tab.rota-tab-2       { color: var(--rota-2); }
+.settings-tab.rota-tab-2.active{ background: var(--rota-2-bg); border-color: var(--rota-2); }
+.settings-tab.rota-tab-3       { color: var(--rota-3); }
+.settings-tab.rota-tab-3.active{ background: var(--rota-3-bg); border-color: var(--rota-3); }
+
+/* STN tabs */
+.settings-tab.stn-tab-41       { color: var(--stn-41); }
+.settings-tab.stn-tab-41.active{ background: color-mix(in srgb,var(--stn-41) 12%,var(--surface)); border-color: var(--stn-41); }
+.settings-tab.stn-tab-42       { color: var(--stn-42); }
+.settings-tab.stn-tab-42.active{ background: color-mix(in srgb,var(--stn-42) 12%,var(--surface)); border-color: var(--stn-42); }
+.settings-tab.stn-tab-43       { color: var(--stn-43); }
+.settings-tab.stn-tab-43.active{ background: color-mix(in srgb,var(--stn-43) 12%,var(--surface)); border-color: var(--stn-43); }
+.settings-tab.stn-tab-44       { color: var(--stn-44); }
+.settings-tab.stn-tab-44.active{ background: color-mix(in srgb,var(--stn-44) 12%,var(--surface)); border-color: var(--stn-44); }
+.settings-tab.stn-tab-45       { color: var(--stn-45); }
+.settings-tab.stn-tab-45.active{ background: color-mix(in srgb,var(--stn-45) 12%,var(--surface)); border-color: var(--stn-45); }
+
+.settings-empty-hint {
+  font-size: 13px;
+  color: var(--text-3);
+  font-style: italic;
+  padding: 6px 2px;
+}
+
+/* Edit button */
+.entry-edit-btn {
+  width: 22px; height: 22px;
+  border: none; background: none;
+  color: var(--text-3);
+  font-size: 13px; cursor: pointer;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--transition), color var(--transition);
+}
+.entry-edit-btn:hover { background: color-mix(in srgb,var(--accent) 12%,var(--surface)); color: var(--accent); }
+
+/* Appliance entry STN colour dot */
+.appliance-entry-row.stn-41 .appliance-code-tag { color: var(--stn-41); }
+.appliance-entry-row.stn-42 .appliance-code-tag { color: var(--stn-42); }
+.appliance-entry-row.stn-43 .appliance-code-tag { color: var(--stn-43); }
+.appliance-entry-row.stn-44 .appliance-code-tag { color: var(--stn-44); }
+.appliance-entry-row.stn-45 .appliance-code-tag { color: var(--stn-45); }
+
+/* =============================================
+   REDCON TABLE — STN colour coding
+   ============================================= */
+.redcon-table tr.stn-41 td.code { color: var(--stn-41); font-weight: 700; }
+.redcon-table tr.stn-42 td.code { color: var(--stn-42); font-weight: 700; }
+.redcon-table tr.stn-43 td.code { color: var(--stn-43); font-weight: 700; }
+.redcon-table tr.stn-44 td.code { color: var(--stn-44); font-weight: 700; }
+.redcon-table tr.stn-45 td.code { color: var(--stn-45); font-weight: 700; }
+.redcon-table tr.stn-41 { border-left: 3px solid var(--stn-41); }
+.redcon-table tr.stn-42 { border-left: 3px solid var(--stn-42); }
+.redcon-table tr.stn-43 { border-left: 3px solid var(--stn-43); }
+.redcon-table tr.stn-44 { border-left: 3px solid var(--stn-44); }
+.redcon-table tr.stn-45 { border-left: 3px solid var(--stn-45); }

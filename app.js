@@ -22,7 +22,7 @@ function rebuildRotaPeopleDB() {
 
 // ---- IC entry CRUD ----
 function addRotaEntryFromUI() {
-  const rota = el('new-entry-rota').value;
+  const rota = S.settingsRotaTab || 'Rota 1';
   const rank = el('new-entry-rank').value.trim().toUpperCase();
   const name = el('new-entry-name').value.trim().toUpperCase();
   if (!name) return;
@@ -58,17 +58,55 @@ function importRotaEntriesFromUI() {
   el('rota-import-text').value = '';
 }
 
+function setRotaTab(rota){ S.settingsRotaTab=rota; S.settingsEditIdx=null; renderRotaSettingsList(); }
+
 function renderRotaSettingsList() {
   const wrap = el('rota-entries-list'); if (!wrap) return;
-  if (!S.rotas.length) { wrap.innerHTML = '<span class="no-names-hint">No IC entries yet — add one below or use Quick Import.</span>'; return; }
-  const cls = {'Rota 1':'re-r1','Rota 2':'re-r2','Rota 3':'re-r3'};
-  wrap.innerHTML = S.rotas.map((r,i) => `
-    <div class="rota-entry-row">
-      <span class="rota-entry-badge ${cls[r.rota]||''}">${r.rota}</span>
-      <span class="rota-entry-rank">${esc(r.rank)||'—'}</span>
-      <span class="rota-entry-name">${esc(r.name)}</span>
-      <button class="entry-remove-btn" onclick="removeRotaEntry(${i})" title="Remove">✕</button>
-    </div>`).join('');
+  const tab = S.settingsRotaTab || 'Rota 1';
+  const tabsHTML = ['Rota 1','Rota 2','Rota 3'].map(r =>
+    `<button class="settings-tab rota-tab-${rotaNum(r)}${r===tab?' active':''}" onclick="setRotaTab('${r}')">${r}</button>`
+  ).join('');
+  const filtered = S.rotas.map((r,i)=>({...r,i})).filter(r=>r.rota===tab);
+  let listHTML;
+  if (!filtered.length) {
+    listHTML = `<div class="settings-empty-hint">No entries for ${tab} — add one below.</div>`;
+  } else {
+    const cls = {'Rota 1':'re-r1','Rota 2':'re-r2','Rota 3':'re-r3'};
+    listHTML = filtered.map(({rota,rank,name,i}) => {
+      if (S.settingsEditIdx === i) {
+        return `<div class="rota-entry-row">
+          <span class="rota-entry-badge ${cls[rota]||''}">${rota}</span>
+          <input class="text-input settings-sm" id="edit-rank-${i}" value="${esc(rank)}" placeholder="Rank">
+          <input class="text-input settings-sm" id="edit-name-${i}" value="${esc(name)}" placeholder="Name"
+                 onkeydown="if(event.key==='Enter')saveRotaEntryEdit(${i})">
+          <button class="secondary-btn-sm" onclick="saveRotaEntryEdit(${i})">Save</button>
+          <button class="entry-remove-btn" onclick="cancelRotaEntryEdit()" title="Cancel">✕</button>
+        </div>`;
+      }
+      return `<div class="rota-entry-row">
+        <span class="rota-entry-badge ${cls[rota]||''}">${rota}</span>
+        <span class="rota-entry-rank">${esc(rank)||'—'}</span>
+        <span class="rota-entry-name">${esc(name)}</span>
+        <button class="entry-edit-btn" onclick="editRotaEntry(${i})" title="Edit">✎</button>
+        <button class="entry-remove-btn" onclick="removeRotaEntry(${i})" title="Remove">✕</button>
+      </div>`;
+    }).join('');
+  }
+  wrap.innerHTML = `<div class="settings-tabs">${tabsHTML}</div><div class="rota-entries-body">${listHTML}</div>`;
+}
+
+function editRotaEntry(idx){
+  S.settingsEditIdx=idx; renderRotaSettingsList();
+  setTimeout(()=>{ const f=el(`edit-name-${idx}`); if(f)f.focus(); },0);
+}
+function cancelRotaEntryEdit(){ S.settingsEditIdx=null; renderRotaSettingsList(); }
+function saveRotaEntryEdit(idx){
+  const rank=(el(`edit-rank-${idx}`)?.value||'').trim().toUpperCase();
+  const name=(el(`edit-name-${idx}`)?.value||'').trim().toUpperCase();
+  if(!name) return;
+  S.rotas[idx].rank=rank; S.rotas[idx].name=name;
+  S.settingsEditIdx=null;
+  saveRotasToStorage(); rebuildRotaPeopleDB(); renderRotaSettingsList();
 }
 
 // ---- Appliance CRUD ----
@@ -91,14 +129,30 @@ function importAppliancesFromUI() {
   el('appliance-import-text').value = '';
 }
 
+function setStnTab(stn){ S.settingsStnTab=stn; renderApplianceSettingsList(); }
+
 function renderApplianceSettingsList() {
   const wrap = el('appliance-settings-list'); if (!wrap) return;
-  if (!S.appliances.length) { wrap.innerHTML = '<span class="no-names-hint">No appliances yet — add one below or use Quick Import.</span>'; return; }
-  wrap.innerHTML = S.appliances.map((a,i) => `
-    <div class="appliance-entry-row">
-      <span class="appliance-code-tag">${esc(a.code)}</span>
-      <button class="entry-remove-btn" onclick="removeAppliance(${i})" title="Remove">✕</button>
-    </div>`).join('');
+  if (!S.appliances.length) {
+    wrap.innerHTML = '<span class="no-names-hint">No appliances yet — add one below or use Quick Import.</span>';
+    return;
+  }
+  const stns = [...new Set(S.appliances.map(a=>getStnFromCode(a.code)).filter(Boolean))].sort();
+  if (!S.settingsStnTab || !stns.includes(S.settingsStnTab)) S.settingsStnTab = stns[0]||null;
+  const tab = S.settingsStnTab;
+  const tabsHTML = stns.map(stn => {
+    const n=stn.replace('STN','');
+    return `<button class="settings-tab stn-tab-${n}${stn===tab?' active':''}" onclick="setStnTab('${stn}')">${stn}</button>`;
+  }).join('');
+  const filtered = tab ? S.appliances.map((a,i)=>({...a,i})).filter(a=>getStnFromCode(a.code)===tab) : S.appliances.map((a,i)=>({...a,i}));
+  const listHTML = filtered.length
+    ? filtered.map(({code,i}) => `
+        <div class="appliance-entry-row ${stnClass(code)}">
+          <span class="appliance-code-tag">${esc(code)}</span>
+          <button class="entry-remove-btn" onclick="removeAppliance(${i})" title="Remove">✕</button>
+        </div>`).join('')
+    : `<div class="settings-empty-hint">No appliances for ${tab}.</div>`;
+  wrap.innerHTML = `<div class="settings-tabs">${tabsHTML}</div><div class="appliance-entries-body" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${listHTML}</div>`;
 }
 
 // =============================================
@@ -170,7 +224,24 @@ const S = {
   redconCautionDismissed: false,
 
   rotas: [], appliances: [],
+
+  // Settings UI state
+  settingsRotaTab: 'Rota 1',
+  settingsStnTab:  null,
+  settingsEditIdx: null,
 };
+
+// =============================================
+// COLOUR HELPERS
+// =============================================
+function rotaNum(rotaName){ return (rotaName||'').replace('Rota ',''); }
+function getStnFromCode(code){
+  const m=String(code).match(/^[Aa](\d{2})/);
+  return m?'STN'+m[1]:null;
+}
+function stnClass(code){
+  const s=getStnFromCode(code); return s?'stn-'+s.replace('STN',''):'';
+}
 
 // =============================================
 // ROTA CYCLE
@@ -197,12 +268,17 @@ function computeShift(refDate) {
 }
 function applyShiftResult(r) {
   S.detectedShiftLabel = r.shiftLabel; S.currentRota = r.currentRota; S.incomingRota = r.incomingRota;
+  const icon = r.shiftLabel === 'Day' ? '☀' : '🌙';
   const badge = el('shift-badge');
-  badge.textContent = r.shiftLabel + ' · ' + r.currentRota;
-  badge.className = 'shift-badge ' + r.shiftLabel.toLowerCase();
+  badge.textContent = r.currentRota + ' ' + icon;
+  badge.className = 'shift-badge rota-badge-' + rotaNum(r.currentRota);
   el('rota-display').innerHTML =
-    `<span class="rota-chip">Current: <strong>${r.currentRota}</strong></span>` +
-    `<span class="rota-chip">Incoming: <strong>${r.incomingRota}</strong></span>`;
+    `<span class="rota-chip rc-${rotaNum(r.currentRota)}">Current: <strong>${r.currentRota}</strong></span>` +
+    `<span class="rota-chip rc-${rotaNum(r.incomingRota)}">Incoming: <strong>${r.incomingRota}</strong></span>`;
+  // Tint IC sections with their respective rota colour
+  const curSec = el('section-current-ic'), incSec = el('section-incoming-ic');
+  if (curSec) curSec.dataset.rota = rotaNum(r.currentRota);
+  if (incSec) incSec.dataset.rota = rotaNum(r.incomingRota);
   if (r.shiftLabel === 'Night') {
     el('section-redcon').classList.remove('hidden');
     updateRedconCautionState();
@@ -662,8 +738,8 @@ function dismissRedconCaution(){
 function renderRedconTable(){
   const wrap=el('redcon-results');
   if(!S.redconData.length){wrap.classList.add('hidden');return;}
-  wrap.innerHTML=`<table class="redcon-table"><thead><tr><th>Code</th><th>Rank</th><th>Name</th></tr></thead><tbody>
-    ${S.redconData.map(r=>`<tr class="${r.matched?'matched':'unmatched'}">
+  wrap.innerHTML=`<table class="redcon-table"><thead><tr><th>Callsign</th><th>Rank</th><th>Name</th></tr></thead><tbody>
+    ${S.redconData.map(r=>`<tr class="${r.matched?'matched':'unmatched'} ${stnClass(r.code)}">
       <td class="code">${r.code}</td><td>${r.rank||'—'}</td><td>${r.name||'—'}</td></tr>`).join('')}
   </tbody></table>`;
   wrap.classList.remove('hidden');

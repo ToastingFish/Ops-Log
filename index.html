@@ -162,19 +162,40 @@
         <div id="settings-panel" class="hidden">
           <div class="settings-inner">
 
-            <label class="field-label">Rotas CSV file path</label>
-            <input type="text" class="text-input" id="cfg-rotas-path"
-                   placeholder="rotas.csv" oninput="saveConfig()">
+            <p class="fl-hint">Select each CSV file from your local machine. The data is read directly by your browser and never uploaded anywhere.</p>
 
-            <label class="field-label">Appliances CSV file path</label>
-            <input type="text" class="text-input" id="cfg-appliances-path"
-                   placeholder="appliances.csv" oninput="saveConfig()">
+            <div class="fl-row">
+              <div class="fl-row-label">
+                <span class="field-label" style="margin:0">Rotas</span>
+                <span class="fl-status" id="fl-status-rotas">Never loaded</span>
+              </div>
+              <label class="fl-btn">
+                <input type="file" accept=".csv" onchange="handleFileUpload('rotas',this.files[0])">
+                📂 Load rotas.csv
+              </label>
+            </div>
 
-            <label class="field-label">People CSV file path</label>
-            <input type="text" class="text-input" id="cfg-people-path"
-                   placeholder="people.csv" oninput="saveConfig()">
+            <div class="fl-row">
+              <div class="fl-row-label">
+                <span class="field-label" style="margin:0">Appliances</span>
+                <span class="fl-status" id="fl-status-appliances">Never loaded</span>
+              </div>
+              <label class="fl-btn">
+                <input type="file" accept=".csv" onchange="handleFileUpload('appliances',this.files[0])">
+                📂 Load appliances.csv
+              </label>
+            </div>
 
-            <button class="secondary-btn" onclick="reloadData()">Reload CSV Files</button>
+            <div class="fl-row">
+              <div class="fl-row-label">
+                <span class="field-label" style="margin:0">People <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional seed)</span></span>
+                <span class="fl-status" id="fl-status-people">Never loaded</span>
+              </div>
+              <label class="fl-btn">
+                <input type="file" accept=".csv" onchange="handleFileUpload('people',this.files[0])">
+                📂 Load people.csv
+              </label>
+            </div>
 
             <div class="settings-section-head">
               <span class="field-label" style="margin:0">Appliances loaded</span>
@@ -201,5 +222,6 @@
   </main>
 
   <script src="app.js"></script>
+  <script src="file-loader.js"></script>
 </body>
 </html>

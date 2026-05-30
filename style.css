@@ -777,6 +777,68 @@ h1 {
   line-height: 1.5;
 }
 
+/* =============================================
+   FILE LOADER (settings panel)
+   ============================================= */
+.fl-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+
+.fl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.fl-row:last-of-type { border-bottom: none; }
+
+.fl-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.fl-status {
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Hide the native file input; style the label as a button */
+.fl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+.fl-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+.fl-btn input[type="file"] {
+  display: none;
+}
+
 .redcon-table-wrap {
   overflow-x: auto;
   border-radius: var(--radius-sm);

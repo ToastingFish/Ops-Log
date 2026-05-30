@@ -43,6 +43,7 @@ function addRotaEntryFromUI() {
   saveRotasToStorage();
   el('new-entry-rank').value = ''; el('new-entry-name').value = '';
   rebuildRotaPeopleDB(); renderRotaSettingsList();
+  showToast(`✓ ${name} added to ${rota}`);
 }
 
 function removeRotaEntry(idx) {
@@ -66,7 +67,8 @@ function importRotaEntriesFromUI() {
       }
     }
   });
-  if (added) { saveRotasToStorage(); rebuildRotaPeopleDB(); renderRotaSettingsList(); }
+  if (added) { saveRotasToStorage(); rebuildRotaPeopleDB(); renderRotaSettingsList(); showToast(`✓ ${added} name${added>1?'s':''} imported`); }
+  else { showToast('No new names to import'); }
   el('rota-import-text').value = '';
 }
 
@@ -97,7 +99,9 @@ function renderRotaSettingsList() {
           <button class="entry-remove-btn" onclick="cancelRotaEntryEdit()" title="Cancel">✕</button>
         </div>`;
       }
-      return `<div class="rota-entry-row" data-rota="${rn}">
+      return `<div class="rota-entry-row" data-rota="${rn}" data-idx="${i}" draggable="true"
+          ondragstart="rotaDragStart(event,${i})" ondragover="rotaDragOver(event)" ondrop="rotaDrop(event,${i})" ondragleave="rotaDragLeave(event)">
+        <span class="drag-handle" title="Drag to reorder">⠿</span>
         <span class="rota-entry-badge ${cls[rota]||''}">${rota}</span>
         <span class="rota-entry-rank">${esc(rank)||'—'}</span>
         <span class="rota-entry-name">${esc(name)}</span>
@@ -120,6 +124,20 @@ function editRotaEntry(idx){
   setTimeout(()=>{ const f=el(`edit-name-${idx}`); if(f)f.focus(); },0);
 }
 function cancelRotaEntryEdit(){ S.settingsEditIdx=null; renderRotaSettingsList(); }
+
+let _dragFromIdx=null;
+function rotaDragStart(e,idx){ _dragFromIdx=idx; e.dataTransfer.effectAllowed='move'; e.currentTarget.classList.add('drag-active'); }
+function rotaDragOver(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; e.currentTarget.classList.add('drag-over'); }
+function rotaDragLeave(e){ e.currentTarget.classList.remove('drag-over'); }
+function rotaDrop(e,toIdx){
+  e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+  if(_dragFromIdx===null||_dragFromIdx===toIdx){_dragFromIdx=null;return;}
+  const moved=S.rotas.splice(_dragFromIdx,1)[0];
+  S.rotas.splice(toIdx,0,moved);
+  _dragFromIdx=null;
+  saveRotasToStorage(); rebuildRotaPeopleDB(); renderRotaSettingsList();
+  showToast('✓ Order updated');
+}
 function saveRotaEntryEdit(idx){
   const rank=(el(`edit-rank-${idx}`)?.value||'').trim().toUpperCase();
   const name=(el(`edit-name-${idx}`)?.value||'').trim().toUpperCase();
@@ -127,12 +145,13 @@ function saveRotaEntryEdit(idx){
   S.rotas[idx].rank=rank; S.rotas[idx].name=name;
   S.settingsEditIdx=null;
   saveRotasToStorage(); rebuildRotaPeopleDB(); renderRotaSettingsList();
+  showToast(`✓ ${name} updated`);
 }
 
 // ---- Appliance CRUD ----
 function addApplianceFromUI() {
   const code = el('new-appliance-code').value.trim().toUpperCase(); if (!code) return;
-  if (!S.appliances.find(a => a.code === code)) { S.appliances.push({code, desc:''}); saveAppliancesToStorage(); renderApplianceSettingsList(); }
+  if (!S.appliances.find(a => a.code === code)) { S.appliances.push({code, desc:''}); sortAppliances(); saveAppliancesToStorage(); renderApplianceSettingsList(); showToast(`✓ ${code} added`); }
   el('new-appliance-code').value = '';
 }
 
@@ -145,7 +164,8 @@ function importAppliancesFromUI() {
   const codes = text.split(/[\n,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
   let added = 0;
   codes.forEach(code => { if (!S.appliances.find(a=>a.code===code)) { S.appliances.push({code,desc:''}); added++; } });
-  if (added) { saveAppliancesToStorage(); renderApplianceSettingsList(); }
+  if (added) { sortAppliances(); saveAppliancesToStorage(); renderApplianceSettingsList(); showToast(`✓ ${added} appliance${added>1?'s':''} imported`); }
+  else { showToast('No new appliances to import'); }
   el('appliance-import-text').value = '';
 }
 
@@ -242,9 +262,13 @@ const S = {
   timeH:            [null,  null,  null,  null,  null],
   timeM:            [null,  null,  null,  null,  null],
   timeAutoSet:      [false, false, false, false, false],
-  timeBlocked:      [false, false, false, false, false], // event disabled by user
-  timeGapDismissed: [false, false, false, false, false], // >2h gap caution dismissed
+  timeBlocked:      [false, false, false, false, false],
+  timeGapDismissed: [false, false, false, false, false],
   p3Times:          ['', '', '', '', ''],
+  // Suggestion state — auto-computed from previous timing, not committed until user confirms
+  timeSuggested:    [false, false, false, false, false],
+  timeSuggestH:     [null,  null,  null,  null,  null],
+  timeSuggestM:     [null,  null,  null,  null,  null],
 
   // REDCON
   redconData: [],
@@ -266,6 +290,13 @@ function rotaNum(rotaName){ return (rotaName||'').replace('Rota ',''); }
 function getStnFromCode(code){
   const m=String(code).match(/^[Aa](\d{2})/);
   return m?'STN'+m[1]:null;
+}
+function sortAppliances(){
+  S.appliances.sort((a,b)=>{
+    const sa=getStnFromCode(a.code)||'', sb=getStnFromCode(b.code)||'';
+    if(sa!==sb) return sa.localeCompare(sb);
+    return a.code.localeCompare(b.code, undefined, {numeric:true});
+  });
 }
 function stnClass(code){
   const s=getStnFromCode(code); return s?'stn-'+s.replace('STN',''):'';
@@ -296,23 +327,40 @@ function computeShift(refDate) {
 }
 function applyShiftResult(r) {
   S.detectedShiftLabel = r.shiftLabel; S.currentRota = r.currentRota; S.incomingRota = r.incomingRota;
-  const icon = r.shiftLabel === 'Day' ? '☀️' : '🌙';
+  const icon = r.shiftLabel === 'Day' ? '🌤️' : '🌙';
   const badge = el('shift-badge');
   badge.textContent = r.currentRota + ' ' + icon;
   badge.className = 'shift-badge rota-badge-' + rotaNum(r.currentRota);
+  // Auto-detect display: show date + shift label
+  const autoDisp = el('auto-detect-display');
+  if (autoDisp && S.shiftMode !== 'override') {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+    autoDisp.innerHTML = `<span class="auto-detect-date">${dateStr}</span><span class="auto-detect-shift">${r.shiftLabel} Shift ${icon}</span>`;
+    autoDisp.classList.remove('hidden');
+  } else if (autoDisp) {
+    autoDisp.classList.add('hidden');
+  }
   el('rota-display').innerHTML =
     `<span class="rota-chip rc-${rotaNum(r.currentRota)}">Current: <strong>${r.currentRota}</strong></span>` +
     `<span class="rota-chip rc-${rotaNum(r.incomingRota)}">Incoming: <strong>${r.incomingRota}</strong></span>`;
-  // Tint IC sections with their respective rota colour
+  // Update combined IC section chips and column tints
+  const chipCur = el('ic-chip-current'), chipInc = el('ic-chip-incoming');
+  const colCur = el('ic-col-current'), colInc = el('ic-col-incoming');
+  if (chipCur) { chipCur.textContent = ''; chipCur.className = `ic-rota-chip rc-${rotaNum(r.currentRota)}`; chipCur.innerHTML = `Current: <strong>${r.currentRota}</strong>`; }
+  if (chipInc) { chipInc.textContent = ''; chipInc.className = `ic-rota-chip rc-${rotaNum(r.incomingRota)}`; chipInc.innerHTML = `Incoming: <strong>${r.incomingRota}</strong>`; }
+  if (colCur) colCur.dataset.rota = rotaNum(r.currentRota);
+  if (colInc) colInc.dataset.rota = rotaNum(r.incomingRota);
+  // Legacy tint (kept for any surviving selectors)
   const curSec = el('section-current-ic'), incSec = el('section-incoming-ic');
   if (curSec) curSec.dataset.rota = rotaNum(r.currentRota);
   if (incSec) incSec.dataset.rota = rotaNum(r.incomingRota);
-  if (r.shiftLabel === 'Night') {
-    el('section-redcon').classList.remove('hidden');
+  const isNight = r.shiftLabel === 'Night';
+  el('section-redcon').classList.toggle('section-disabled', !isNight);
+  if (isNight) {
     updateRedconCautionState();
     renderRedconTable();
   } else {
-    el('section-redcon').classList.add('hidden');
     S.redconData = []; S.redconCautionState = null; S.redconCautionDismissed = false;
     renderRedconCaution();
   }
@@ -327,8 +375,9 @@ function setShiftMode(mode) {
   S.shiftMode = mode;
   toggle('btn-auto', mode==='auto'); toggle('btn-override', mode==='override');
   el('override-panel').classList.toggle('hidden', mode==='auto');
+  const autoDisp = el('auto-detect-display'); if(autoDisp) autoDisp.classList.toggle('hidden', mode==='override');
   if (mode==='auto') { S.overrideDate=null; applyShiftResult(computeShift(new Date())); }
-  else { if (!S.overrideDate){S.overrideDate=new Date();S.overrideDate.setHours(0,0,0,0);} applyOverrideShift(); }
+  else { if (!S.overrideDate){S.overrideDate=new Date();S.overrideDate.setHours(0,0,0,0);} applyOverrideShift(); updateOverrideDateChip(); }
 }
 function setOverrideShiftType(t) {
   S.overrideShiftType=t; toggle('seg-day',t==='D'); toggle('seg-night',t==='N'); applyOverrideShift();
@@ -371,7 +420,7 @@ function calNav(dir){
   if(calViewMonth<0){calViewMonth=11;calViewYear--;} if(calViewMonth>11){calViewMonth=0;calViewYear++;}
   renderCalendar();
 }
-function selectCalDay(y,m,d){ S.overrideDate=new Date(y,m,d); renderCalendar(); applyOverrideShift(); }
+function selectCalDay(y,m,d){ S.overrideDate=new Date(y,m,d); renderCalendar(); applyOverrideShift(); updateOverrideDateChip(); }
 
 // =============================================
 // =============================================
@@ -389,14 +438,77 @@ function renderRotaButtons(cid,rotaName,stateKey){
     return `<button class="name-btn ${sel?'selected':''}" onclick="selectIC('${stateKey}',${pid})"><span class="rank-tag">${p.rank}</span>${p.name}</button>`;
   }).join('');
 }
-function selectIC(stateKey,pid){S[stateKey]=pid;renderICButtons();updateValidation();}
+function selectIC(stateKey,pid){
+  S[stateKey]=pid; renderICButtons(); updateValidation();
+  const rotaName=stateKey==='currentRotaPersonId'?S.currentRota:S.incomingRota;
+  const entry=S.rotas.find(r=>{
+    const eid=findOrAddRotaPerson(r.rota,r.rank,r.name);
+    return eid===pid;
+  });
+  const label=stateKey==='currentRotaPersonId'?'Current IC':'Incoming IC';
+  if(entry) showToast(`✓ ${label}: ${entry.rank?entry.rank+' ':''}${entry.name}`);
+}
 
 // =============================================
 // P3
 // =============================================
 function setP3(hasP3){
   S.hasP3=hasP3; toggle('btn-nop3',!hasP3); toggle('btn-yesp3',hasP3);
-  el('p3-panel').classList.toggle('hidden',!hasP3); updateValidation();
+  el('p3-summary-panel').classList.toggle('hidden',!hasP3);
+  if(!hasP3) closeP3Editor();
+  renderP3Summary(); updateValidation();
+}
+
+function openP3Editor(){
+  if(!S.hasP3) return;
+  el('p3-editor-overlay').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeP3Editor(e){
+  if(e&&e.target!==el('p3-editor-overlay')) return;
+  el('p3-editor-overlay').classList.add('hidden');
+  document.body.style.overflow='';
+  renderP3Summary();
+}
+
+function renderP3Summary(){
+  const content=el('p3-summary-content'); if(!content) return;
+  if(!S.hasP3){content.innerHTML='';return;}
+
+  const p=S.p3PersonId?getPersonById(S.p3PersonId):null;
+  const activatorText=p?(p.rank?`${p.rank} ${p.name}`:p.name):'<em>not set</em>';
+
+  const labels=['Activated','Left Div.','Arrived','Left Loc.','Reached'];
+  const cellsHTML=labels.map((lbl,i)=>{
+    const blocked=S.timeBlocked[i];
+    const t=S.p3Times[i];
+    const hasSugg=!blocked&&!t&&S.timeSuggested[i];
+    let timeStr,cls,hint='';
+    let cautionIcon='';
+    if(blocked){
+      timeStr='Disabled'; cls='is-blocked';
+    } else if(t){
+      timeStr=`${t.slice(0,2)}:${t.slice(2)}`; cls='';
+      const caution=getCautionForSlot(i);
+      if(caution==='earlier') { cls='is-caution-err'; cautionIcon='<span class="p3-sum-caution p3-sum-caution-err" title="Timing is before a previous event">✕</span>'; }
+      else if(caution) { cls='is-caution'; cautionIcon='<span class="p3-sum-caution" title="Timing has a warning — tap to review">⚠</span>'; }
+    } else if(hasSugg){
+      timeStr=`${String(S.timeSuggestH[i]).padStart(2,'0')}:${String(S.timeSuggestM[i]).padStart(2,'0')}`;
+      cls='is-suggested';
+      hint='<span class="p3-sum-hint">Suggested — tap to confirm</span>';
+    } else {
+      timeStr='—'; cls='is-unset';
+    }
+    return `<div class="p3-summary-cell ${cls}" onclick="openTimingEditor(${i})" title="Click to edit">
+      <span class="p3-sum-label">${lbl} ✎</span>
+      <span class="p3-sum-time">${timeStr}${cautionIcon}</span>
+      ${hint}
+    </div>`;
+  }).join('');
+
+  content.innerHTML=`
+    <div class="p3-summary-activator">Activated by: <strong>${activatorText}</strong></div>
+    <div class="p3-summary-grid">${cellsHTML}</div>`;
 }
 function selectP3Preset(mode){
   el('abtn-opsctr').classList.toggle('selected',mode==='OPS CTR');
@@ -521,6 +633,9 @@ function refreshDrums(){
   S.timeBlocked=      [false, false, false, false, false];
   S.timeGapDismissed= [false, false, false, false, false];
   S.p3Times=          ['','','','',''];
+  S.timeSuggested=    [false, false, false, false, false];
+  S.timeSuggestH=     [null,  null,  null,  null,  null];
+  S.timeSuggestM=     [null,  null,  null,  null,  null];
   for(let i=0;i<5;i++){renderDrum(i);renderTimingFeedback(i);renderDisableButton(i);}
 }
 
@@ -554,26 +669,20 @@ function commitTimeNow(idx){
 }
 
 function autoAdvanceFrom(fromIdx){
-  const sl=S.detectedShiftLabel;
+  // Only populate suggestions — never commit. User must confirm each timing individually.
   let rH=S.timeH[fromIdx],rM=S.timeM[fromIdx];
   if(rH===null||rM===null) return;
   for(let i=fromIdx+1;i<5;i++){
     if(S.timeBlocked[i]) continue;
-    let ah=rH,am=rM+1; if(am>=60){am=0;ah=(ah+1)%24;}
-    if(S.timeH[i]===null||S.timeAutoSet[i]){
-      S.timeH[i]=ah;S.timeM[i]=am;
-      S.p3Times[i]=String(ah).padStart(2,'0')+String(am).padStart(2,'0');
-      S.timeAutoSet[i]=true;S.timeGapDismissed[i]=false;
-      renderDrum(i);renderTimingFeedback(i);rH=ah;rM=am;
-    }else{
-      const rOrd=nightOrder(rH*100+rM,sl),tOrd=nightOrder(S.timeH[i]*100+S.timeM[i],sl);
-      if(tOrd<=rOrd){
-        S.timeH[i]=ah;S.timeM[i]=am;
-        S.p3Times[i]=String(ah).padStart(2,'0')+String(am).padStart(2,'0');
-        S.timeAutoSet[i]=true;S.timeGapDismissed[i]=false;
-        renderDrum(i);renderTimingFeedback(i);rH=ah;rM=am;
-      }else{rH=S.timeH[i];rM=S.timeM[i];}
+    if(S.timeH[i]!==null){
+      // Already committed — use as cascade base, leave it alone
+      rH=S.timeH[i]; rM=S.timeM[i]; continue;
     }
+    let ah=rH,am=rM+1; if(am>=60){am=0;ah=(ah+1)%24;}
+    S.timeSuggested[i]=true;
+    S.timeSuggestH[i]=ah;
+    S.timeSuggestM[i]=am;
+    rH=ah; rM=am;
   }
 }
 
@@ -581,6 +690,7 @@ function clearTimesFrom(idx){
   for(let i=idx;i<5;i++){
     S.timeH[i]=null;S.timeM[i]=null;S.timeAutoSet[i]=false;
     S.timeBlocked[i]=false;S.timeGapDismissed[i]=false;
+    S.timeSuggested[i]=false;S.timeSuggestH[i]=null;S.timeSuggestM[i]=null;
     S.p3Times[i]=''; renderDrum(i); renderTimingFeedback(i); renderDisableButton(i);
   }
 }
@@ -659,21 +769,29 @@ function validateBlockPattern(){
   return null;
 }
 
+function recalcSuggestions(){
+  // Clear all existing suggestions then re-derive from the last committed timing
+  for(let i=0;i<5;i++){S.timeSuggested[i]=false;S.timeSuggestH[i]=null;S.timeSuggestM[i]=null;}
+  for(let i=4;i>=0;i--){
+    if(!S.timeBlocked[i]&&S.p3Times[i]){autoAdvanceFrom(i);break;}
+  }
+}
+
 function blockEvent(idx){
   S.timeBlocked[idx]=true;
   S.timeH[idx]=null;S.timeM[idx]=null;S.p3Times[idx]='';
   S.timeAutoSet[idx]=false;S.timeGapDismissed[idx]=false;
+  S.timeSuggested[idx]=false;S.timeSuggestH[idx]=null;S.timeSuggestM[idx]=null;
   renderDrum(idx);renderDisableButton(idx);renderTimingFeedback(idx);
-  // Re-evaluate neighbours — their "previous time" lookup may have changed
   for(let i=0;i<5;i++) if(i!==idx) renderTimingFeedback(i);
-  updateValidation();
+  recalcSuggestions(); renderP3Summary(); updateValidation();
 }
 
 function unblockEvent(idx){
   S.timeBlocked[idx]=false;
   renderDrum(idx);renderDisableButton(idx);renderTimingFeedback(idx);
   for(let i=0;i<5;i++) if(i!==idx) renderTimingFeedback(i);
-  updateValidation();
+  recalcSuggestions(); renderP3Summary(); updateValidation();
 }
 
 function toggleBlock(idx){
@@ -742,8 +860,13 @@ function parseRedcon(){
       S.redconData.push({code,personId:(f.rank&&f.name)?findOrAddPerson(f.rank,f.name):null,rank:f.rank,name:f.name,matched:true});
     }
   });
-  S.redconCautionState=S.redconData.some(r=>r.personId)?null:'nonames';
+  const matched=S.redconData.filter(r=>r.matched&&r.name);
+  const unmatched=S.redconData.filter(r=>!r.matched||!r.name);
+  if(!matched.length) S.redconCautionState='nonames';
+  else if(unmatched.length) S.redconCautionState='incomplete';
+  else S.redconCautionState=null;
   renderRedconTable(); renderRedconCaution(); updateValidation();
+  if(S.redconData.length) showToast(`✓ ${matched.length}/${S.redconData.length} appliances parsed from REDCON`);
 }
 
 function updateRedconCautionState(){
@@ -753,10 +876,16 @@ function updateRedconCautionState(){
 }
 
 function renderRedconCaution(){
-  const eEl=el('redcon-caution-empty'), nEl=el('redcon-caution-nonames');
-  if(!eEl||!nEl) return;
-  eEl.classList.toggle('hidden', !(S.redconCautionState==='empty'  &&!S.redconCautionDismissed));
-  nEl.classList.toggle('hidden', !(S.redconCautionState==='nonames'&&!S.redconCautionDismissed));
+  const eEl=el('redcon-caution-empty'), nEl=el('redcon-caution-nonames'), iEl=el('redcon-caution-incomplete');
+  if(!eEl||!nEl||!iEl) return;
+  eEl.classList.toggle('hidden', !(S.redconCautionState==='empty'      &&!S.redconCautionDismissed));
+  nEl.classList.toggle('hidden', !(S.redconCautionState==='nonames'    &&!S.redconCautionDismissed));
+  iEl.classList.toggle('hidden', !(S.redconCautionState==='incomplete' &&!S.redconCautionDismissed));
+  if(S.redconCautionState==='incomplete'&&!S.redconCautionDismissed){
+    const unmatched=S.redconData.filter(r=>!r.matched||!r.name).map(r=>r.code).join(', ');
+    const msg=el('redcon-incomplete-msg');
+    if(msg) msg.textContent=`Incomplete manning data — no names found for: ${unmatched}. Their IC names will be blank.`;
+  }
 }
 
 function dismissRedconCaution(){
@@ -766,8 +895,13 @@ function dismissRedconCaution(){
 function renderRedconTable(){
   const wrap=el('redcon-results');
   if(!S.redconData.length){wrap.classList.add('hidden');return;}
+  const sorted=[...S.redconData].sort((a,b)=>{
+    const sa=getStnFromCode(a.code)||'', sb=getStnFromCode(b.code)||'';
+    if(sa!==sb) return sa.localeCompare(sb);
+    return a.code.localeCompare(b.code,undefined,{numeric:true});
+  });
   wrap.innerHTML=`<table class="redcon-table"><thead><tr><th>Callsign</th><th>Rank</th><th>Name</th></tr></thead><tbody>
-    ${S.redconData.map(r=>`<tr class="${r.matched?'matched':'unmatched'} ${stnClass(r.code)}">
+    ${sorted.map(r=>`<tr class="${r.matched?'matched':'unmatched'} ${stnClass(r.code)}">
       <td class="code">${r.code}</td><td>${r.rank||'—'}</td><td>${r.name||'—'}</td></tr>`).join('')}
   </tbody></table>`;
   wrap.classList.remove('hidden');
@@ -811,6 +945,7 @@ function validate(){
 }
 
 function updateValidation(){
+  renderP3Summary();
   const errs=validate();
   ['current-ic','incoming-ic','p3'].forEach(sec=>{
     const has=errs.some(e=>e.section===sec);
@@ -917,8 +1052,12 @@ function buildClipboardString(){
   const parts=['OPSLOG','2',st,ss,String(S.currentRotaPersonId),String(S.incomingRotaPersonId),
     S.hasP3?'YES':'NO',S.hasP3?String(S.p3PersonId):'',
     p3t[0],p3t[1],p3t[2],p3t[3],p3t[4]];
-  const rf=S.redconData.filter(r=>r.personId);
-  parts.push(String(rf.length)); rf.forEach(r=>parts.push(r.code,String(r.personId)));
+  // Send all redcon entries sorted; personId=0 means no match (VBA will write blank name)
+  const rf=[...S.redconData].sort((a,b)=>{
+    const sa=getStnFromCode(a.code)||'',sb=getStnFromCode(b.code)||'';
+    return sa!==sb?sa.localeCompare(sb):a.code.localeCompare(b.code,undefined,{numeric:true});
+  });
+  parts.push(String(rf.length)); rf.forEach(r=>parts.push(r.code,String(r.personId||0)));
   const uPIds=new Set(); if(S.hasP3&&S.p3PersonId!=null)uPIds.add(S.p3PersonId);
   rf.forEach(r=>{if(r.personId!=null)uPIds.add(r.personId);});
   const pDB=loadPeopleDB(); const uP=[...uPIds].map(id=>pDB.people.find(p=>p.id===id)).filter(Boolean);
@@ -932,11 +1071,125 @@ function buildClipboardString(){
 // =============================================
 // SETTINGS
 // =============================================
-function toggleSettings(){
-  const panel=el('settings-panel'),chevron=el('settings-chevron');
-  const no=!panel.classList.contains('hidden');
-  panel.classList.toggle('hidden',no); chevron.textContent=no?'▸':'▾';
+// =============================================
+// TOAST NOTIFICATION
+// =============================================
+function showToast(message){
+  const t=document.createElement('div');
+  t.className='toast-notification';
+  t.textContent=message;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('toast-visible')));
+  setTimeout(()=>{
+    t.classList.remove('toast-visible');
+    setTimeout(()=>t.remove(),420);
+  },1800);
 }
+
+// =============================================
+// PER-TIMING POPUP
+// =============================================
+function captureTimingState(){
+  return {
+    timeH:[...S.timeH], timeM:[...S.timeM],
+    timeAutoSet:[...S.timeAutoSet], timeBlocked:[...S.timeBlocked],
+    timeGapDismissed:[...S.timeGapDismissed], p3Times:[...S.p3Times],
+    timeSuggested:[...S.timeSuggested],
+    timeSuggestH:[...S.timeSuggestH], timeSuggestM:[...S.timeSuggestM],
+  };
+}
+function restoreTimingState(snap){
+  S.timeH=snap.timeH; S.timeM=snap.timeM;
+  S.timeAutoSet=snap.timeAutoSet; S.timeBlocked=snap.timeBlocked;
+  S.timeGapDismissed=snap.timeGapDismissed; S.p3Times=snap.p3Times;
+  S.timeSuggested=snap.timeSuggested||[false,false,false,false,false];
+  S.timeSuggestH=snap.timeSuggestH||[null,null,null,null,null];
+  S.timeSuggestM=snap.timeSuggestM||[null,null,null,null,null];
+  for(let i=0;i<5;i++){renderDrum(i);renderTimingFeedback(i);renderDisableButton(i);}
+  updateValidation();
+}
+
+function openTimingEditor(idx){
+  if(!S.hasP3) return;
+  S.activeTimingIdx=idx;
+  S._timingSnapshot=captureTimingState();
+  // If slot has a suggestion but no committed value, pre-load the suggestion into the drum
+  if(S.timeSuggested[idx] && S.timeH[idx]===null){
+    S.timeH[idx]=S.timeSuggestH[idx];
+    S.timeM[idx]=S.timeSuggestM[idx];
+    renderDrum(idx);
+  }
+  // Show only the active timing cell
+  for(let i=0;i<5;i++){
+    const c=el(`timing-cell-${i}`);
+    if(c) c.style.display=i===idx?'':'none';
+  }
+  el('timing-popup-title').textContent=`P3 — ${TIMING_LABELS[idx]}`;
+  el('p3-editor-overlay').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeTimingPopupBackdrop(e){
+  if(e&&e.target===el('p3-editor-overlay')) cancelTimingEditor();
+}
+function cancelTimingEditor(){
+  if(S._timingSnapshot) restoreTimingState(S._timingSnapshot);
+  S._timingSnapshot=null;
+  el('p3-editor-overlay').classList.add('hidden');
+  document.body.style.overflow='';
+  renderP3Summary();
+}
+function confirmTimingEditor(){
+  const idx=S.activeTimingIdx;
+  // Clear the suggestion for this slot (it's now committed)
+  S.timeSuggested[idx]=false; S.timeSuggestH[idx]=null; S.timeSuggestM[idx]=null;
+  S._timingSnapshot=null;
+  el('p3-editor-overlay').classList.add('hidden');
+  document.body.style.overflow='';
+  // Re-derive suggestions for subsequent unset slots
+  recalcSuggestions();
+  renderP3Summary();
+  showToast(`✓ P3 "${TIMING_LABELS[idx]}" updated`);
+}
+
+// =============================================
+// CALENDAR POPUP
+// =============================================
+function openCalendarPopup(){
+  el('calendar-overlay').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeCalendarPopup(e){
+  if(e&&e.target!==el('calendar-overlay')) return;
+  el('calendar-overlay').classList.add('hidden');
+  document.body.style.overflow='';
+}
+function confirmCalendarDate(){
+  el('calendar-overlay').classList.add('hidden');
+  document.body.style.overflow='';
+  updateOverrideDateChip();
+  showToast('✓ Override date updated');
+}
+function updateOverrideDateChip(){
+  const chip=el('override-date-chip'); if(!chip) return;
+  if(S.overrideDate){
+    const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    chip.textContent=`${S.overrideDate.getDate()} ${m[S.overrideDate.getMonth()]} ${S.overrideDate.getFullYear()}`;
+  } else {
+    chip.textContent='Select date';
+  }
+}
+
+function openSettings(){
+  el('settings-overlay').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeSettings(e){
+  if(e&&e.target!==el('settings-overlay')) return;
+  el('settings-overlay').classList.add('hidden');
+  document.body.style.overflow='';
+}
+// Legacy alias
+function toggleSettings(){ openSettings(); }
 
 // =============================================
 // UTILS
@@ -965,3 +1218,69 @@ function init(){
   updateValidation();
 }
 document.addEventListener('DOMContentLoaded',init);
+
+// =============================================
+// THEME (light / dark)
+// =============================================
+let _manualTheme = false;  // true once user has toggled manually
+
+function applyTheme(theme){
+  document.documentElement.dataset.theme = theme;
+  const btn = el('theme-toggle-btn');
+  if(btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+function autoTheme(hour){
+  if(_manualTheme) return;
+  applyTheme(hour >= 7 && hour < 19 ? 'light' : 'dark');
+}
+
+function toggleTheme(){
+  _manualTheme = true;
+  const current = document.documentElement.dataset.theme;
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+
+// Live clock with per-digit drum roll
+(function tickClock(){
+  const pad = n => String(n).padStart(2,'0');
+  let prevDigits = [];
+
+  function buildClock(container, digits){
+    // digits: array of chars e.g. ['2','2',':','5','4',':','0','9']
+    container.innerHTML = digits.map((ch, i) => {
+      if(ch === ':') return `<span class="clock-colon">:</span>`;
+      return `<span class="clock-digit" data-i="${i}"><span class="clock-digit-inner">${ch}</span></span>`;
+    }).join('');
+  }
+
+  function update(){
+    const now = new Date();
+    autoTheme(now.getHours());
+    const s = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+    const digits = s.split('');
+    const c = el('live-clock'); if(!c) return;
+
+    if(prevDigits.length === 0){
+      buildClock(c, digits);
+    } else {
+      const spans = c.querySelectorAll('.clock-digit');
+      let spanIdx = 0;
+      digits.forEach((ch, i) => {
+        if(ch === ':') return;
+        const span = spans[spanIdx++];
+        if(!span) return;
+        if(prevDigits[i] !== ch){
+          span.querySelector('.clock-digit-inner').textContent = ch;
+          span.classList.remove('rolling');
+          void span.offsetWidth; // reflow to restart animation
+          span.classList.add('rolling');
+        }
+      });
+    }
+    prevDigits = digits;
+  }
+
+  update();
+  setInterval(update, 1000);
+})();

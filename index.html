@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- MODAL OVERLAY -->
+  <!-- ALERT MODAL -->
   <div class="modal-overlay hidden" id="modal-overlay">
     <div class="modal-box" id="modal-box">
       <div class="modal-title" id="modal-title"></div>
@@ -18,70 +18,183 @@
     <div class="modal-dismiss-hint hidden" id="modal-dismiss-hint"></div>
   </div>
 
+  <!-- CALENDAR POPUP -->
+  <div class="cal-overlay hidden" id="calendar-overlay" onclick="closeCalendarPopup(event)">
+    <div class="cal-modal-panel">
+      <div class="cal-modal-header">
+        <span class="cal-modal-title">Select Date</span>
+        <button class="settings-close-btn" onclick="closeCalendarPopup()">✕</button>
+      </div>
+      <div class="cal-modal-body">
+        <div id="calendar"></div>
+      </div>
+      <div class="cal-modal-footer">
+        <button class="secondary-btn" onclick="closeCalendarPopup()">Cancel</button>
+        <button class="confirm-btn" onclick="confirmCalendarDate()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- P3 SINGLE-TIMING EDITOR POPUP -->
+  <div class="p3-editor-overlay hidden" id="p3-editor-overlay" onclick="closeTimingPopupBackdrop(event)">
+    <div class="p3-editor-panel" id="p3-editor-panel">
+      <div class="p3-editor-header">
+        <span id="timing-popup-title" class="p3-editor-title">P3 Timing</span>
+        <button class="p3-editor-close" onclick="cancelTimingEditor()">✕</button>
+      </div>
+      <div class="p3-editor-body">
+        <!-- All 5 timing cells live here; JS shows only the active one -->
+        <div id="timing-cell-0" class="timing-cell">
+          <span class="timing-label">Activated</span>
+          <div class="drum-picker" id="drum-0"></div>
+          <div class="timing-feedback" id="tf-0"></div>
+        </div>
+        <div id="timing-cell-1" class="timing-cell">
+          <span class="timing-label">Left Division</span>
+          <div class="drum-picker" id="drum-1"></div>
+          <div class="timing-feedback" id="tf-1"></div>
+        </div>
+        <div id="timing-cell-2" class="timing-cell">
+          <span class="timing-label">Arrived</span>
+          <div class="drum-picker" id="drum-2"></div>
+          <div class="timing-feedback" id="tf-2"></div>
+        </div>
+        <div id="timing-cell-3" class="timing-cell">
+          <span class="timing-label">Left Location</span>
+          <div class="drum-picker" id="drum-3"></div>
+          <div class="timing-feedback" id="tf-3"></div>
+        </div>
+        <div id="timing-cell-4" class="timing-cell">
+          <span class="timing-label">Reached Div.</span>
+          <div class="drum-picker" id="drum-4"></div>
+          <div class="timing-feedback" id="tf-4"></div>
+        </div>
+      </div>
+      <div class="p3-editor-footer">
+        <button class="secondary-btn" onclick="cancelTimingEditor()">Cancel</button>
+        <button class="confirm-btn" onclick="confirmTimingEditor()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div class="settings-overlay hidden" id="settings-overlay" onclick="closeSettings(event)">
+    <div class="settings-modal-panel" id="settings-modal-panel">
+      <div class="settings-modal-header">
+        <span class="settings-modal-title">⚙️ Settings</span>
+        <button class="settings-close-btn" onclick="closeSettings()">✕</button>
+      </div>
+      <div class="settings-modal-body">
+        <div class="settings-section-head">
+          <span class="field-label" style="margin:0">IC Entries</span>
+        </div>
+        <div id="rota-entries-list" class="rota-entries-list"></div>
+        <div class="settings-add-form">
+          <input type="text" class="text-input settings-sm" id="new-entry-rank" placeholder="Rank"
+                 onkeydown="if(event.key==='Enter')el('new-entry-name').focus()">
+          <input type="text" class="text-input settings-sm" id="new-entry-name" placeholder="Name"
+                 onkeydown="if(event.key==='Enter')addRotaEntryFromUI()">
+          <button class="secondary-btn-sm" onclick="addRotaEntryFromUI()">+ Add</button>
+        </div>
+        <details class="settings-import-block">
+          <summary>Quick import…</summary>
+          <p class="settings-import-hint">One entry per line (or comma-separated):<br>
+            <code>Rota 1|SGT|Ahmad, Rota 1|CPL|Raza</code>
+          </p>
+          <textarea class="settings-import-box" id="rota-import-text" rows="5"
+            placeholder="Rota 1|SGT|Name&#10;Rota 2|CPL|Name"></textarea>
+          <button class="secondary-btn" onclick="importRotaEntriesFromUI()">Import</button>
+        </details>
+        <div class="settings-section-head" style="margin-top:18px">
+          <span class="field-label" style="margin:0">Appliances</span>
+        </div>
+        <div id="appliance-settings-list" class="appliance-settings-list"></div>
+        <div class="settings-add-form">
+          <input type="text" class="text-input settings-sm" id="new-appliance-code" placeholder="e.g. A411"
+                 onkeydown="if(event.key==='Enter')addApplianceFromUI()">
+          <button class="secondary-btn-sm" onclick="addApplianceFromUI()">+ Add</button>
+        </div>
+        <details class="settings-import-block">
+          <summary>Quick import…</summary>
+          <p class="settings-import-hint">Comma-separated or one per line:<br>
+            <code>A411, A412, A421, A422</code>
+          </p>
+          <textarea class="settings-import-box" id="appliance-import-text" rows="3"
+            placeholder="A411, A412, A421"></textarea>
+          <button class="secondary-btn" onclick="importAppliancesFromUI()">Import</button>
+        </details>
+      </div>
+    </div>
+  </div>
+
   <header>
     <div class="header-inner">
       <h1>Ops Log</h1>
-      <div id="shift-badge" class="shift-badge">—</div>
+      <span id="live-clock" class="live-clock">--:--:--</span>
+      <div class="header-actions">
+        <button class="header-theme-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle dark/light mode">🌙</button>
+        <button class="header-settings-btn" onclick="openSettings()">⚙️ Settings</button>
+      </div>
     </div>
   </header>
+  <div id="shift-badge" class="shift-badge" style="display:none">—</div>
 
   <main class="main-grid">
 
-    <!-- ===== LEFT COLUMN ===== -->
-    <div class="col-left">
+    <!-- COL 1: Shift + IC Selection -->
+    <div class="col-shift-ic">
 
-      <!-- SHIFT SECTION -->
       <section class="card" id="section-shift">
-        <div class="section-head">
-          <h2>Shift</h2>
-        </div>
+        <div class="section-head"><h2>Shift</h2></div>
         <div class="toggle-row">
           <button class="toggle-btn active" id="btn-auto" onclick="setShiftMode('auto')">Auto-detect</button>
           <button class="toggle-btn" id="btn-override" onclick="setShiftMode('override')">Override</button>
         </div>
-
+        <div id="auto-detect-display" class="auto-detect-display"></div>
         <div id="override-panel" class="hidden">
-          <div class="override-inner">
-            <div id="calendar"></div>
-            <div class="shift-type-picker">
-              <button class="seg-btn active" id="seg-day" onclick="setOverrideShiftType('D')">Day</button>
-              <button class="seg-btn" id="seg-night" onclick="setOverrideShiftType('N')">Night</button>
+          <div class="override-date-row">
+            <button class="override-date-chip" id="override-date-chip" onclick="openCalendarPopup()">
+              Select date
+            </button>
+            <div class="override-ampm-stack">
+              <button class="ampm-btn active" id="seg-day" onclick="setOverrideShiftType('D')">🌤️ AM</button>
+              <button class="ampm-btn" id="seg-night" onclick="setOverrideShiftType('N')">🌙 PM</button>
             </div>
           </div>
         </div>
-
-        <div id="rota-display" class="rota-display"></div>
+        <div id="rota-display" class="rota-display" style="display:none"></div>
       </section>
 
-      <!-- CURRENT IC -->
       <section class="card" id="section-current-ic">
-        <div class="section-head">
-          <h2>Current IC</h2>
+        <div class="ic-rota-row" id="ic-col-current">
+          <span class="ic-rota-chip" id="ic-chip-current"></span>
           <span class="err-badge hidden" id="err-current-ic">!</span>
         </div>
-        <div id="current-ic-buttons" class="name-buttons"></div>
+        <div id="current-ic-buttons" class="name-buttons name-buttons-row"></div>
       </section>
 
-      <!-- INCOMING IC -->
       <section class="card" id="section-incoming-ic">
-        <div class="section-head">
-          <h2>Incoming IC</h2>
+        <div class="ic-rota-row" id="ic-col-incoming">
+          <span class="ic-rota-chip" id="ic-chip-incoming"></span>
           <span class="err-badge hidden" id="err-incoming-ic">!</span>
         </div>
-        <div id="incoming-ic-buttons" class="name-buttons"></div>
+        <div id="incoming-ic-buttons" class="name-buttons name-buttons-row"></div>
       </section>
 
-      <!-- REDCON (night only) -->
-      <section class="card hidden" id="section-redcon">
+    </div>
+
+    <!-- COL 2: REDCON -->
+    <div class="col-redcon">
+      <section class="card" id="section-redcon">
         <div class="section-head">
           <h2>REDCON Alpha</h2>
           <span class="err-badge hidden" id="err-redcon">!</span>
         </div>
+        <div class="redcon-day-notice">Night shift only — not applicable for day shifts.</div>
         <p class="hint">Paste the REDCON email below. Alpha manning will be extracted automatically.</p>
         <textarea id="redcon-paste" rows="8" placeholder="Paste REDCON email here…"
                   oninput="parseRedcon()"></textarea>
         <div id="redcon-results" class="redcon-table-wrap hidden"></div>
-
         <div id="redcon-caution-empty" class="caution-box hidden">
           <span class="caution-icon">⚠</span>
           <div class="caution-text">
@@ -89,7 +202,6 @@
             <button class="caution-dismiss-btn" onclick="dismissRedconCaution()">Yes, proceed without alpha data</button>
           </div>
         </div>
-
         <div id="redcon-caution-nonames" class="caution-box hidden">
           <span class="caution-icon">⚠</span>
           <div class="caution-text">
@@ -97,14 +209,19 @@
             <button class="caution-dismiss-btn" onclick="dismissRedconCaution()">Yes, proceed without alpha data</button>
           </div>
         </div>
+        <div id="redcon-caution-incomplete" class="caution-box hidden">
+          <span class="caution-icon">⚠</span>
+          <div class="caution-text">
+            <span class="caution-msg" id="redcon-incomplete-msg">Some appliances have no manning data — their IC names will be blank.</span>
+            <button class="caution-dismiss-btn" onclick="dismissRedconCaution()">Yes, proceed anyway</button>
+          </div>
+        </div>
       </section>
+    </div>
 
-    </div><!-- /col-left -->
+    <!-- COL 3: P3 + Generate -->
+    <div class="col-p3">
 
-    <!-- ===== RIGHT COLUMN ===== -->
-    <div class="col-right">
-
-      <!-- P3 SECTION -->
       <section class="card" id="section-p3">
         <div class="section-head">
           <h2>P3 Turnout</h2>
@@ -115,109 +232,34 @@
           <button class="toggle-btn p3-yes" id="btn-yesp3" onclick="setP3(true)">P3 Turnout</button>
         </div>
 
-        <div id="p3-panel" class="hidden">
-          <div class="p3-inner">
-
-            <div class="p3-activator-group">
-              <label class="field-label">Activated by</label>
-              <div class="p3-activator-presets" id="p3-activator-presets">
-                <button class="activator-btn" id="abtn-opsctr"  onclick="selectP3Preset('OPS CTR')">OPS CTR</button>
-                <button class="activator-btn" id="abtn-headops" onclick="selectP3Preset('HEAD OPS')">HEAD OPS</button>
-                <button class="activator-btn" id="abtn-others"  onclick="selectP3Preset('others')">Others…</button>
-              </div>
-              <div id="p3-others-wrap" class="hidden">
-                <input type="text" class="text-input" id="p3-others-input"
-                       placeholder="Enter name or rank+name…"
-                       oninput="onP3OthersInput()">
-              </div>
-              <div class="p3-activator-current hidden" id="p3-activator-current"></div>
+        <div id="p3-summary-panel" class="hidden">
+          <!-- Activator stays inline on the card -->
+          <div class="p3-activator-group">
+            <label class="field-label">Activated by</label>
+            <div class="p3-activator-presets" id="p3-activator-presets">
+              <button class="activator-btn" id="abtn-opsctr"  onclick="selectP3Preset('OPS CTR')">OPS CTR</button>
+              <button class="activator-btn" id="abtn-headops" onclick="selectP3Preset('HEAD OPS')">HEAD OPS</button>
+              <button class="activator-btn" id="abtn-others"  onclick="selectP3Preset('others')">Others…</button>
             </div>
-
-            <!-- Timing drums — DOM built by buildDrums() in app.js -->
-            <div class="p3-timings">
-              <div class="timing-row"><span class="timing-label">Activated</span>    <div class="drum-picker" id="drum-0"></div><div class="timing-feedback" id="tf-0"></div></div>
-              <div class="timing-row"><span class="timing-label">Left Division</span> <div class="drum-picker" id="drum-1"></div><div class="timing-feedback" id="tf-1"></div></div>
-              <div class="timing-row"><span class="timing-label">Arrived</span>       <div class="drum-picker" id="drum-2"></div><div class="timing-feedback" id="tf-2"></div></div>
-              <div class="timing-row"><span class="timing-label">Left Location</span> <div class="drum-picker" id="drum-3"></div><div class="timing-feedback" id="tf-3"></div></div>
-              <div class="timing-row"><span class="timing-label">Reached Div.</span>  <div class="drum-picker" id="drum-4"></div><div class="timing-feedback" id="tf-4"></div></div>
+            <div id="p3-others-wrap" class="hidden">
+              <input type="text" class="text-input" id="p3-others-input"
+                     placeholder="Enter name or rank+name…"
+                     oninput="onP3OthersInput()">
             </div>
-
+            <div class="p3-activator-current hidden" id="p3-activator-current"></div>
           </div>
+          <!-- Clickable timing summary — each cell opens a per-timing popup -->
+          <div id="p3-summary-content"></div>
         </div>
       </section>
 
-      <!-- GENERATE -->
       <section class="card" id="section-generate">
         <button class="generate-btn has-errors" id="generate-btn" onclick="generate()">
           Copy Code to Clipboard
         </button>
       </section>
 
-      <!-- SETTINGS -->
-      <section class="card" id="section-settings">
-        <button class="settings-toggle" onclick="toggleSettings()">
-          <span>Settings</span>
-          <span id="settings-chevron">▸</span>
-        </button>
-        <div id="settings-panel" class="hidden">
-          <div class="settings-inner">
-
-            <!-- ── IC ENTRIES ── -->
-            <div class="settings-section-head">
-              <span class="field-label" style="margin:0">IC Entries</span>
-            </div>
-
-            <div id="rota-entries-list" class="rota-entries-list"></div>
-
-            <div class="settings-add-form">
-              <input type="text" class="text-input settings-sm" id="new-entry-rank" placeholder="Rank"
-                     onkeydown="if(event.key==='Enter')el('new-entry-name').focus()">
-              <input type="text" class="text-input settings-sm" id="new-entry-name" placeholder="Name"
-                     onkeydown="if(event.key==='Enter')addRotaEntryFromUI()">
-              <button class="secondary-btn-sm" onclick="addRotaEntryFromUI()">+ Add</button>
-            </div>
-
-            <details class="settings-import-block">
-              <summary>Quick import…</summary>
-              <p class="settings-import-hint">
-                One entry per line (or comma-separated):<br>
-                <code>Rota 1|SGT|Ahmad, Rota 1|CPL|Raza</code><br>
-                <code>Rota 2|SGT|Prawin</code>
-              </p>
-              <textarea class="settings-import-box" id="rota-import-text" rows="5"
-                placeholder="Rota 1|SGT|Name&#10;Rota 2|CPL|Name"></textarea>
-              <button class="secondary-btn" onclick="importRotaEntriesFromUI()">Import</button>
-            </details>
-
-            <!-- ── APPLIANCES ── -->
-            <div class="settings-section-head" style="margin-top:18px">
-              <span class="field-label" style="margin:0">Appliances</span>
-            </div>
-
-            <div id="appliance-settings-list" class="appliance-settings-list"></div>
-
-            <div class="settings-add-form">
-              <input type="text" class="text-input settings-sm" id="new-appliance-code" placeholder="e.g. A411"
-                     onkeydown="if(event.key==='Enter')addApplianceFromUI()">
-              <button class="secondary-btn-sm" onclick="addApplianceFromUI()">+ Add</button>
-            </div>
-
-            <details class="settings-import-block">
-              <summary>Quick import…</summary>
-              <p class="settings-import-hint">
-                Comma-separated or one per line:<br>
-                <code>A411, A412, A421, A422</code>
-              </p>
-              <textarea class="settings-import-box" id="appliance-import-text" rows="3"
-                placeholder="A411, A412, A421"></textarea>
-              <button class="secondary-btn" onclick="importAppliancesFromUI()">Import</button>
-            </details>
-
-          </div>
-        </div>
-      </section>
-
-    </div><!-- /col-right -->
+    </div>
 
   </main>
 

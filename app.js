@@ -106,9 +106,13 @@ function renderRotaSettingsList() {
       </div>`;
     }).join('');
   }
+  const rotaIdx = ['Rota 1','Rota 2','Rota 3'].indexOf(tab);
+  const posClass = rotaIdx === 0 ? 'tab-pos-first' : rotaIdx === 2 ? 'tab-pos-last' : 'tab-pos-mid';
   wrap.innerHTML = `<div class="settings-tabs">${tabsHTML}</div>
-    <div class="rota-entries-body">${listHTML}</div>
-    <div style="margin-top:4px"><span class="settings-ts">Last changed: ${ts}</span></div>`;
+    <div class="settings-tab-content rc-${rotaNum(tab)} ${posClass}">
+      <div class="rota-entries-body">${listHTML}</div>
+      <span class="settings-ts" style="display:block;margin-top:4px">Last changed: ${ts}</span>
+    </div>`;
 }
 
 function editRotaEntry(idx){
@@ -169,9 +173,14 @@ function renderApplianceSettingsList() {
           <button class="entry-remove-btn" onclick="removeAppliance(${i})" title="Remove">✕</button>
         </div>`).join('')
     : `<div class="settings-empty-hint">No appliances for ${tab}.</div>`;
+  const stnIdx = stns.indexOf(tab);
+  const stnPos = stnIdx === 0 ? 'tab-pos-first' : stnIdx === stns.length-1 ? 'tab-pos-last' : 'tab-pos-mid';
+  const stnNum = tab ? tab.replace('STN','') : '';
   wrap.innerHTML = `<div class="settings-tabs">${tabsHTML}</div>
-    <div class="appliance-entries-body">${listHTML}</div>
-    <div style="margin-top:4px"><span class="settings-ts">Last changed: ${ts}</span></div>`;
+    <div class="settings-tab-content stn-content-${stnNum} ${stnPos}">
+      <div class="appliance-entries-body">${listHTML}</div>
+      <span class="settings-ts" style="display:block;margin-top:4px">Last changed: ${ts}</span>
+    </div>`;
 }
 
 // =============================================

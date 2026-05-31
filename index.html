@@ -127,9 +127,120 @@
     </div>
   </div>
 
+  <!-- HELP MODAL -->
+  <div class="settings-overlay hidden" id="help-overlay" onclick="closeHelp(event)">
+    <div class="settings-modal-panel help-modal-panel" id="help-modal-panel">
+      <div class="settings-modal-header">
+        <span class="settings-modal-title">❓ User Guide</span>
+        <button class="settings-close-btn" onclick="closeHelp()">✕</button>
+      </div>
+      <div class="settings-modal-body help-modal-body">
+
+        <div class="help-section">
+          <h3 class="help-heading">1. Setting Up the Control Panel</h3>
+          <p>Before using the panel, load your rota names and appliances via <strong>Settings</strong>.</p>
+          <div class="help-step">
+            <span class="help-step-num">1</span>
+            <div>
+              <strong>IC Entries (Rota Names)</strong><br>
+              Open <strong>Settings → IC Entries → Quick import…</strong><br>
+              Copy the contents of <code>Ops Log Rota Names List.txt</code> and paste it into the import box, then click <strong>Import</strong>.
+            </div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">2</span>
+            <div>
+              <strong>Appliances</strong><br>
+              Open <strong>Settings → Appliances → Quick import…</strong><br>
+              Copy the contents of <code>Ops Log Alpha List.txt</code> and paste it into the import box, then click <strong>Import</strong>.
+            </div>
+          </div>
+          <div class="help-note">
+            💾 <strong>Note:</strong> These settings are saved in your browser and will <em>not</em> be erased when you refresh the page.
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h3 class="help-heading">2. Setting Up the VBA Code in Excel</h3>
+          <p>The VBA macro needs to be loaded into Excel once.</p>
+          <div class="help-step">
+            <span class="help-step-num">1</span>
+            <div>Open the Ops Log Excel file and go to the <strong>Ops Log</strong> tab.</div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">2</span>
+            <div>Press <kbd>Alt</kbd>&thinsp;+&thinsp;<kbd>F11</kbd> to open the VBA editor.</div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">3</span>
+            <div>Press <kbd>Ctrl</kbd>&thinsp;+&thinsp;<kbd>M</kbd> to import a module, then select the file <code>Open this in VBA.bas</code>.</div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">4</span>
+            <div>Close the VBA editor. The macro is now ready.</div>
+          </div>
+          <div class="help-note">
+            ⚠️ <strong>Note:</strong> The loaded VBA module is <em>not</em> permanently saved in the Excel file. Every time the Ops Log Excel file is closed and reopened, you will need to repeat steps 2–4 to reload the macro.
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h3 class="help-heading">3. Workflow — Generating an Ops Log</h3>
+          <div class="help-step">
+            <span class="help-step-num">1</span>
+            <div><strong>(Night shift only)</strong> Complete the REDCON email first, then paste it into the <strong>REDCON Alpha</strong> section of this panel.</div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">2</span>
+            <div>Select the <strong>Current IC</strong> and <strong>Incoming IC</strong>, set the shift mode, and fill in any P3 details if applicable.</div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">3</span>
+            <div>Click <strong>Copy Code to Clipboard</strong>. The code is now in your clipboard.</div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">4</span>
+            <div>Switch to Excel and press <kbd>Alt</kbd>&thinsp;+&thinsp;<kbd>F8</kbd>, select <strong>GenerateFromClipboard</strong>, then click <strong>Run</strong> (or press <kbd>Enter</kbd>).</div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">5</span>
+            <div>Excel reads the code from the clipboard and automatically generates the ops log below the previous entry.</div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h3 class="help-heading">4. Settings Options</h3>
+          <ul class="help-list">
+            <li><strong>Add a name</strong> — type a rank and name in the fields at the bottom of IC Entries and click <strong>+ Add</strong>. Use the rota tabs (Rota 1 / 2 / 3) to target the correct rota.</li>
+            <li><strong>Edit a name</strong> — click the ✎ pencil icon on any entry, update the fields, and click <strong>Save</strong>.</li>
+            <li><strong>Remove a name</strong> — click the ✕ button on the entry.</li>
+            <li><strong>Reorder names</strong> — drag the ⠿ handle on any entry to move it up or down. The order here controls the order of the name buttons on the main panel.</li>
+            <li><strong>Add / remove appliances</strong> — use the Appliances section. Adding or removing an appliance here immediately affects which callsigns appear in the generated night-shift ops log.</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3 class="help-heading">5. Troubleshooting</h3>
+          <div class="help-trouble">
+            <div class="help-trouble-q">❝ No names loaded for Rota _. Check Settings. ❞</div>
+            <p>The IC name data for that rota has been cleared (e.g. browser data was wiped). Follow <strong>Section 1</strong> to re-import the names.</p>
+          </div>
+          <div class="help-trouble">
+            <div class="help-trouble-q">❝ Pressing Alt+F8 does not show the GenerateFromClipboard macro. ❞</div>
+            <p>The VBA module has not been loaded into Excel yet, or was unloaded when the file was closed. Follow <strong>Section 2</strong> to load it again.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <header>
     <div class="header-inner">
-      <h1>Ops Log</h1>
+      <div class="header-title-group">
+        <h1>Ops Log</h1>
+        <button class="header-help-btn" onclick="openHelp()" title="User Guide">? Help</button>
+      </div>
       <span id="live-clock" class="live-clock">--:--:--</span>
       <div class="header-actions">
         <button class="header-theme-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle dark/light mode">🌙</button>

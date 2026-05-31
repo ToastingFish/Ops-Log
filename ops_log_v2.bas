@@ -162,10 +162,13 @@ Public Sub GenerateFromClipboard()
     End If
 
     Dim firstSerial As Long
-    If previousEndSerial > 0 Then
+    If wasGeneratedSeparately Then
+        ' Gap detected — do not continue numbering from the old block; use the shift default.
+        firstSerial = IIf(info.ShiftLabel = "Night", 34, 15)
+    ElseIf previousEndSerial > 0 Then
         firstSerial = previousEndSerial + 1
     Else
-        firstSerial = IIf(info.ShiftLabel = "Night", 15, 1)
+        firstSerial = IIf(info.ShiftLabel = "Night", 34, 15)
     End If
 
     Application.ScreenUpdating = False
@@ -422,13 +425,13 @@ Private Sub ParseClipboardString(ByVal raw As String, ByRef result As ParsedInpu
             If IsNumeric(Trim(parts(ri + 1))) Then
                 Dim pid As Long
                 pid = CLng(Trim(parts(ri + 1)))
-                Dim p As PersonInfo
-                ' m_People[] is now populated from the pre-pass above —
-                ' this lookup will find the correct rank/name instead of
-                ' returning "ID X NOT FOUND".
-                p = LookupPersonById(pid)
-                m_RedconList(k).Rank       = p.Rank
-                m_RedconList(k).PersonName = p.PersonName
+                ' personId=0 means no IC assigned — leave rank/name as empty strings.
+                If pid > 0 Then
+                    Dim p As PersonInfo
+                    p = LookupPersonById(pid)
+                    m_RedconList(k).Rank       = p.Rank
+                    m_RedconList(k).PersonName = p.PersonName
+                End If
             End If
             ri = ri + 2
         Next k
@@ -525,21 +528,22 @@ Private Sub BuildNightReport( _
 
     SetCommonColumnWidths ws, baseCol, False
 
-    ' Use module-level REDCON data populated by ParseClipboardString.
+    ' The control panel always sends the full configured appliance list in the REDCON
+    ' section (personId=0 for those with no IC assigned), so m_RedconList is the
+    ' authoritative source.  appliances.csv is kept only as a last-resort fallback
+    ' for old clipboard codes that pre-date this behaviour.
     Dim applianceList() As ApplianceInfo
     Dim applianceCount As Long
-    applianceCount = m_RedconCount
+    Dim k As Long
 
-    If applianceCount > 0 Then
+    If m_RedconCount > 0 Then
+        applianceCount = m_RedconCount
         ReDim applianceList(1 To applianceCount)
-        Dim k As Long
         For k = 1 To applianceCount
             applianceList(k) = m_RedconList(k)
         Next k
-    End If
-
-    ' Fallback when no REDCON alpha data: list all appliances from appliances.csv with blank IC names.
-    If applianceCount = 0 And m_ApplianceCount > 0 Then
+    ElseIf m_ApplianceCount > 0 Then
+        ' Fallback: old clipboard with no appliance list — use appliances.csv with blank ICs.
         applianceCount = m_ApplianceCount
         ReDim applianceList(1 To applianceCount)
         Dim ak As Long

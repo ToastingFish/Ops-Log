@@ -848,17 +848,15 @@ function parseRedcon(){
     }
     found[code]={rank,name};
   }
-  const mc=S.appliances.length?S.appliances.map(a=>a.code):Object.keys(found);
-  S.redconData=mc.map(code=>{
-    const f=found[code];
-    if(f&&f.rank&&f.name) return{code,personId:findOrAddPerson(f.rank,f.name),rank:f.rank,name:f.name,matched:true};
-    return{code,personId:null,rank:'',name:'',matched:false};
-  });
-  Object.keys(found).forEach(code=>{
-    if(!S.redconData.find(r=>r.code===code)){
-      const f=found[code];
-      S.redconData.push({code,personId:(f.rank&&f.name)?findOrAddPerson(f.rank,f.name):null,rank:f.rank,name:f.name,matched:true});
-    }
+  // Master list is always S.appliances (what the user configured in Settings).
+  // If no appliances are configured yet, fall back to whatever codes the email contained.
+  // Codes in the email that are NOT in S.appliances are silently ignored, so removing
+  // an appliance from Settings always removes it from the generated report.
+  const mc = S.appliances.length ? S.appliances.map(a => a.code) : Object.keys(found);
+  S.redconData = mc.map(code => {
+    const f = found[code];
+    if (f && f.rank && f.name) return { code, personId: findOrAddPerson(f.rank, f.name), rank: f.rank, name: f.name, matched: true };
+    return { code, personId: null, rank: '', name: '', matched: false };
   });
   const matched=S.redconData.filter(r=>r.matched&&r.name);
   const unmatched=S.redconData.filter(r=>!r.matched||!r.name);
@@ -1052,14 +1050,23 @@ function buildClipboardString(){
   const parts=['OPSLOG','2',st,ss,String(S.currentRotaPersonId),String(S.incomingRotaPersonId),
     S.hasP3?'YES':'NO',S.hasP3?String(S.p3PersonId):'',
     p3t[0],p3t[1],p3t[2],p3t[3],p3t[4]];
-  // Send all redcon entries sorted; personId=0 means no match (VBA will write blank name)
-  const rf=[...S.redconData].sort((a,b)=>{
-    const sa=getStnFromCode(a.code)||'',sb=getStnFromCode(b.code)||'';
-    return sa!==sb?sa.localeCompare(sb):a.code.localeCompare(b.code,undefined,{numeric:true});
-  });
-  parts.push(String(rf.length)); rf.forEach(r=>parts.push(r.code,String(r.personId||0)));
+  // Always build the appliance list from S.appliances (the authoritative configured list).
+  // Overlay IC person IDs from S.redconData where available; 0 means no IC assigned.
+  // This ensures:
+  //  (a) appliances removed from Settings are never sent even if they were in a pasted REDCON email
+  //  (b) all configured appliances are always sent even when the user proceeds without REDCON data
+  const rf = S.appliances
+    .map(a => {
+      const rd = S.redconData.find(r => r.code === a.code);
+      return { code: a.code, personId: (rd && rd.personId) ? rd.personId : 0 };
+    })
+    .sort((a, b) => {
+      const sa = getStnFromCode(a.code)||'', sb = getStnFromCode(b.code)||'';
+      return sa !== sb ? sa.localeCompare(sb) : a.code.localeCompare(b.code, undefined, {numeric: true});
+    });
+  parts.push(String(rf.length)); rf.forEach(r => parts.push(r.code, String(r.personId)));
   const uPIds=new Set(); if(S.hasP3&&S.p3PersonId!=null)uPIds.add(S.p3PersonId);
-  rf.forEach(r=>{if(r.personId!=null)uPIds.add(r.personId);});
+  rf.forEach(r=>{ if(r.personId) uPIds.add(r.personId); });
   const pDB=loadPeopleDB(); const uP=[...uPIds].map(id=>pDB.people.find(p=>p.id===id)).filter(Boolean);
   parts.push('PEOPLE',String(uP.length)); uP.forEach(p=>parts.push(String(p.id),p.rank||'',p.name||''));
   const uRIds=new Set([S.currentRotaPersonId,S.incomingRotaPersonId].filter(id=>id!=null));
@@ -1186,6 +1193,16 @@ function openSettings(){
 function closeSettings(e){
   if(e&&e.target!==el('settings-overlay')) return;
   el('settings-overlay').classList.add('hidden');
+  document.body.style.overflow='';
+}
+
+function openHelp(){
+  el('help-overlay').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeHelp(e){
+  if(e&&e.target!==el('help-overlay')) return;
+  el('help-overlay').classList.add('hidden');
   document.body.style.overflow='';
 }
 // Legacy alias

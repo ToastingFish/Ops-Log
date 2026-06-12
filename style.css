@@ -2058,3 +2058,343 @@ h1 {
   font-family: "SF Mono","Cascadia Code",monospace;
   color: var(--text);
 }
+
+/* =============================================
+   MAIN PANEL TABS (Ops Log / RDR Report)
+   ============================================= */
+.main-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 2px solid var(--border);
+  position: sticky;
+  top: 56px;
+  z-index: 90;
+}
+.main-tab-btn {
+  padding: 10px 22px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition);
+  letter-spacing: .01em;
+}
+.main-tab-btn:hover { color: var(--text); }
+.main-tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.main-view { display: block; }
+.main-view.hidden { display: none; }
+
+/* =============================================
+   RDR — MAIN GRID LAYOUT
+   ============================================= */
+.rdr-main-grid {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 14px;
+  padding: 14px 16px 0;
+}
+@media (max-width: 800px) {
+  .rdr-main-grid { grid-template-columns: 1fr; }
+}
+.rdr-col-controls {}
+.rdr-col-att {}
+
+/* =============================================
+   RDR — ATTENDANCE GRID
+   ============================================= */
+.att-grid {
+  display: grid;
+  grid-template-columns: 1fr 130px 1fr 130px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.att-col-hdr {
+  padding: 7px 10px;
+  background: var(--surface-2);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.att-col-hdr.span-2 { grid-column: span 2; }
+.att-section-hdr {
+  grid-column: span 2;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-2);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.att-section-hdr .rota-mini-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.att-name-cell {
+  padding: 7px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+}
+.att-name-cell.empty { background: var(--surface-2); }
+.att-status-cell {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+}
+.att-status-cell.empty { background: var(--surface-2); }
+.att-status-select {
+  width: 100%;
+  padding: 4px 4px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.att-empty-row {
+  grid-column: span 4;
+  padding: 14px 12px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-style: italic;
+  text-align: center;
+}
+
+/* =============================================
+   RDR — ROLLCALL PASTE
+   ============================================= */
+.rollcall-paste-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.rollcall-paste-group:last-child { margin-bottom: 0; }
+.rollcall-paste-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rollcall-results {
+  margin-top: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.rollcall-result-title {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.rollcall-result-title.matched-title {
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+  color: var(--success);
+}
+.rollcall-result-title.unmatched-title {
+  background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+  color: var(--warn);
+}
+.rollcall-result-list { padding: 3px 0; }
+.rollcall-match-row, .rollcall-unmatch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+.rollcall-match-name  { color: var(--text); font-weight: 500; }
+.rollcall-match-status { font-weight: 700; }
+.rollcall-unmatch-row { color: var(--warn); }
+.rollcall-no-match {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-2);
+  font-style: italic;
+}
+
+/* =============================================
+   RDR — SUBJECT PREVIEW & ROTA INFO
+   ============================================= */
+.subject-preview {
+  margin-top: 14px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-2);
+  font-style: italic;
+}
+.rdr-rota-info {
+  margin-top: 8px;
+  padding: 7px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-2);
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.rdr-rota-info .rota-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* =============================================
+   SETTINGS — Section divider for RDR section
+   ============================================= */
+.settings-section-divider {
+  margin: 20px -4px 12px;
+  padding: 6px 4px 4px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--text-3);
+}
+
+/* No-names hint used in RDR settings list */
+.no-names-hint {
+  font-size: 12px;
+  color: var(--text-2);
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* =============================================
+   ADD TURNOUT BUTTON
+   ============================================= */
+.add-turnout-btn {
+  width: 100%;
+  padding: 22px 16px;
+  border: 2.5px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all var(--transition);
+  margin-top: 4px;
+}
+.add-turnout-btn:hover {
+  border-color: var(--p3-red);
+  color: var(--p3-red);
+  background: color-mix(in srgb, var(--p3-red) 5%, transparent);
+}
+.add-turnout-plus {
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+/* =============================================
+   TURNOUT CARD
+   ============================================= */
+.turnout-card {
+  border: 1.5px solid color-mix(in srgb, var(--p3-red) 28%, var(--border));
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  background: color-mix(in srgb, var(--p3-red) 4%, var(--surface));
+  margin-bottom: 10px;
+}
+.turnout-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.turnout-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .7px;
+  color: var(--p3-red);
+}
+.turnout-remove-btn {
+  width: 24px; height: 24px;
+  border: none; background: none;
+  color: var(--text-3);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+.turnout-remove-btn:hover {
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  color: var(--danger);
+}
+.turnout-type-row { margin-bottom: 12px; }
+.turnout-type-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.turnout-type-btn {
+  padding: 7px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.turnout-type-btn:hover { border-color: var(--p3-red); color: var(--text); }
+.turnout-type-btn.selected {
+  border-color: var(--p3-red);
+  background: color-mix(in srgb, var(--p3-red) 12%, var(--surface));
+  color: var(--p3-red);
+}

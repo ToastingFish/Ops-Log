@@ -256,16 +256,18 @@ const S = {
   shiftMode: 'auto', overrideDate: null, overrideShiftType: 'D',
   detectedShiftLabel: '', currentRota: '', incomingRota: '',
   currentRotaPersonId: null, incomingRotaPersonId: null,
-  hasP3: false, p3PersonId: null, p3ActivatorMode: null,
 
-  // Drum
+  // Turnouts (replaces single hasP3 toggle)
+  turnouts: [],
+  activeTurnoutIdx: null,
+
+  // Drum scratchpad — loaded from the active turnout when timing popup opens
   timeH:            [null,  null,  null,  null,  null],
   timeM:            [null,  null,  null,  null,  null],
   timeAutoSet:      [false, false, false, false, false],
   timeBlocked:      [false, false, false, false, false],
   timeGapDismissed: [false, false, false, false, false],
   p3Times:          ['', '', '', '', ''],
-  // Suggestion state — auto-computed from previous timing, not committed until user confirms
   timeSuggested:    [false, false, false, false, false],
   timeSuggestH:     [null,  null,  null,  null,  null],
   timeSuggestM:     [null,  null,  null,  null,  null],
@@ -317,9 +319,9 @@ const ROTA_MAP = {
 function computeShift(refDate) {
   const h = refDate.getHours(), m = refDate.getMinutes();
   const totalMin = h * 60 + m;
-  const isNight = totalMin >= 18*60+10 || totalMin < 8*60+10;
+  const isNight = totalMin >= 18*60 || totalMin < 8*60;
   const sd = new Date(refDate); sd.setHours(0,0,0,0);
-  if (isNight && totalMin < 8*60+10) sd.setDate(sd.getDate()-1);
+  if (isNight && totalMin < 8*60) sd.setDate(sd.getDate()-1);
   const dp = Math.floor((sd - CYCLE_START)/86400000);
   const cy = ((dp % 6)+6)%6+1;
   const [cur,inc] = ROTA_MAP[cy][isNight?'night':'day'];
@@ -361,11 +363,11 @@ function applyShiftResult(r) {
     updateRedconCautionState();
     renderRedconTable();
   } else {
-    S.redconData = []; S.redconCautionState = null; S.redconCautionDismissed = false;
+    // Don't wipe existing redcon data — just hide the caution if user was on night and switched to day override
     renderRedconCaution();
   }
-  S.currentRotaPersonId = null; S.incomingRotaPersonId = null;
-  renderICButtons(); renderP3Activator(); refreshDrums(); updateValidation();
+  // Do NOT reset IC selections or turnouts — preserve all user-entered state across mode/date switches
+  renderICButtons(); renderTurnoutList(); updateValidation();
 }
 
 // =============================================
@@ -450,94 +452,185 @@ function selectIC(stateKey,pid){
 }
 
 // =============================================
-// P3
+// TURNOUTS
 // =============================================
-function setP3(hasP3){
-  S.hasP3=hasP3; toggle('btn-nop3',!hasP3); toggle('btn-yesp3',hasP3);
-  el('p3-summary-panel').classList.toggle('hidden',!hasP3);
-  if(!hasP3) closeP3Editor();
-  renderP3Summary(); updateValidation();
+function createTurnoutObj(){
+  return {
+    type:'P3', activatorMode:null, personId:null, othersText:'',
+    timeH:[null,null,null,null,null], timeM:[null,null,null,null,null],
+    timeAutoSet:[false,false,false,false,false],
+    timeBlocked:[false,false,false,false,false],
+    timeGapDismissed:[false,false,false,false,false],
+    p3Times:['','','','',''],
+    timeSuggested:[false,false,false,false,false],
+    timeSuggestH:[null,null,null,null,null],
+    timeSuggestM:[null,null,null,null,null],
+  };
 }
 
-function openP3Editor(){
-  if(!S.hasP3) return;
-  el('p3-editor-overlay').classList.remove('hidden');
-  document.body.style.overflow='hidden';
-}
-function closeP3Editor(e){
-  if(e&&e.target!==el('p3-editor-overlay')) return;
-  el('p3-editor-overlay').classList.add('hidden');
-  document.body.style.overflow='';
-  renderP3Summary();
+function addTurnout(){
+  S.turnouts.push(createTurnoutObj());
+  renderTurnoutList(); updateValidation();
 }
 
-function renderP3Summary(){
-  const content=el('p3-summary-content'); if(!content) return;
-  if(!S.hasP3){content.innerHTML='';return;}
+function removeTurnout(idx){
+  S.turnouts.splice(idx,1);
+  renderTurnoutList(); updateValidation();
+}
 
-  const p=S.p3PersonId?getPersonById(S.p3PersonId):null;
-  const activatorText=p?(p.rank?`${p.rank} ${p.name}`:p.name):'<em>not set</em>';
+function selectTurnoutType(idx, type){
+  const t=S.turnouts[idx]; if(!t) return;
+  if(type==='others'){
+    // Clear built-in label; keep any previously typed custom value in t.type
+    if(['P3','DSA-LITE','FCV'].includes(t.type)) t.type='';
+  } else {
+    t.type=type; // don't touch t.othersText — that belongs to activator
+  }
+  renderTurnoutList();
+  if(type==='others') setTimeout(()=>{ const i=el(`turnout-type-custom-${idx}`); if(i)i.focus(); },0);
+  updateValidation();
+}
+
+function onTurnoutTypeCustomInput(idx){
+  const inp=el(`turnout-type-custom-${idx}`); if(!inp) return;
+  const t=S.turnouts[idx]; if(!t) return;
+  const val=inp.value.trim().toUpperCase();
+  t.type=val||''; // only t.type, never t.othersText (that belongs to activator)
+  const tick=el(`turnout-type-tick-${idx}`);
+  if(tick) tick.textContent=val?`✓ ${val}`:'';
+  updateValidation();
+}
+
+function selectTurnoutActivator(idx, mode){
+  const t=S.turnouts[idx]; if(!t) return;
+  t.activatorMode=mode;
+  if(mode==='others'){
+    t.personId=t.othersText?findOrAddPerson('',t.othersText):null;
+    renderTurnoutList();
+    setTimeout(()=>{ const i=el(`turnout-activator-custom-${idx}`); if(i)i.focus(); },0);
+  } else {
+    t.personId=findOrAddPerson('',mode);
+    renderTurnoutList();
+  }
+  updateValidation();
+}
+
+function onTurnoutActivatorCustomInput(idx){
+  const inp=el(`turnout-activator-custom-${idx}`); if(!inp) return;
+  const t=S.turnouts[idx]; if(!t) return;
+  const val=inp.value.trim().toUpperCase();
+  t.othersText=val; t.personId=val?findOrAddPerson('',val):null;
+  const tick=el(`turnout-act-tick-${idx}`);
+  if(tick){
+    const p=t.personId?getPersonById(t.personId):null;
+    tick.textContent=p?`✓ ${p.rank?`${p.rank} ${p.name}`:p.name}`:'';
+  }
+  updateValidation();
+}
+
+function validateBlockPatternFor(t){
+  const bi=t.timeBlocked.map((b,i)=>b?i:-1).filter(i=>i>=0);
+  if(bi.length===0) return null;
+  if(bi.length===5) return 'all';
+  for(let i=1;i<bi.length;i++) if(bi[i]!==bi[i-1]+1) return 'noncontiguous';
+  if(bi[0]!==0&&bi[bi.length-1]!==4) return 'middle';
+  return null;
+}
+
+function getCautionForTurnoutSlot(t, idx){
+  if(t.timeBlocked[idx]) return null;
+  const h=t.timeH[idx], m=t.timeM[idx];
+  if(h===null||m===null) return null;
+  const sl=S.detectedShiftLabel;
+  let prevHHMM=null;
+  for(let i=idx-1;i>=0;i--){
+    if(!t.timeBlocked[i]&&t.p3Times[i]&&t.p3Times[i].length===4){ prevHHMM=parseInt(t.p3Times[i],10); break; }
+  }
+  if(prevHHMM!==null){
+    const tOrd=nightOrder(h*100+m,sl), pOrd=nightOrder(prevHHMM,sl);
+    if(tOrd<=pOrd) return 'earlier';
+  }
+  if(!isInShiftBounds(h,m,sl)) return 'oob';
+  if(prevHHMM!==null&&!t.timeGapDismissed[idx]){
+    const tOrd=nightOrder(h*100+m,sl), pOrd=nightOrder(prevHHMM,sl);
+    if(ordToMins(tOrd)-ordToMins(pOrd)>120) return 'gap';
+  }
+  return null;
+}
+
+function renderTurnoutList(){
+  const container=el('turnout-list'); if(!container) return;
+  container.innerHTML=S.turnouts.map((t,idx)=>renderTurnoutCardHTML(t,idx)).join('');
+}
+
+function renderTurnoutCardHTML(t, idx){
+  const builtInTypes=['P3','DSA-LITE','FCV'];
+  const isCustomType=!builtInTypes.includes(t.type);
+  const typeButtonsHTML=builtInTypes.map(label=>{
+    const sel=t.type===label;
+    return `<button class="turnout-type-btn${sel?' selected':''}" onclick="selectTurnoutType(${idx},'${label}')">${label}</button>`;
+  }).join('')+`<button class="turnout-type-btn${isCustomType?' selected':''}" onclick="selectTurnoutType(${idx},'others')">Others…</button>`;
+
+  const typeTickHTML=!isCustomType&&t.type?`<div class="p3-activator-current" style="margin-top:6px">✓ ${esc(t.type)}</div>`:'';
+  const customTypeHTML=isCustomType?`<div style="margin-top:6px"><input type="text" class="text-input" id="turnout-type-custom-${idx}"
+    value="${esc(t.type)}" placeholder="Enter type…"
+    oninput="onTurnoutTypeCustomInput(${idx})">
+  <div id="turnout-type-tick-${idx}" class="p3-activator-current">${t.type?`✓ ${esc(t.type)}`:''}</div></div>`:'';
+
+  const activatorModes=['OPS CTR','HEAD OPS','others'];
+  const isCustomAct=t.activatorMode==='others';
+  const activatorHTML=activatorModes.map(mode=>{
+    const sel=t.activatorMode===mode;
+    const label=mode==='others'?'Others…':mode;
+    return `<button class="activator-btn${sel?' selected':''}" onclick="selectTurnoutActivator(${idx},'${mode}')">${label}</button>`;
+  }).join('');
+
+  const customActHTML=isCustomAct?`<div style="margin-top:6px"><input type="text" class="text-input" id="turnout-activator-custom-${idx}"
+    value="${esc(t.othersText||'')}" placeholder="Enter name or rank+name…"
+    oninput="onTurnoutActivatorCustomInput(${idx})"></div>`:'';
+
+  const p=t.personId?getPersonById(t.personId):null;
+  const actCurrentHTML=`<div id="turnout-act-tick-${idx}" class="p3-activator-current">${p?`✓ ${esc(p.rank?`${p.rank} ${p.name}`:p.name)}`:''}</div>`;
 
   const labels=['Activated','Left Div.','Arrived','Left Loc.','Reached'];
   const cellsHTML=labels.map((lbl,i)=>{
-    const blocked=S.timeBlocked[i];
-    const t=S.p3Times[i];
-    const hasSugg=!blocked&&!t&&S.timeSuggested[i];
-    let timeStr,cls,hint='';
-    let cautionIcon='';
+    const blocked=t.timeBlocked[i];
+    const tm=t.p3Times[i];
+    const hasSugg=!blocked&&!tm&&t.timeSuggested[i];
+    let timeStr,cls,hint='',cautionIcon='';
     if(blocked){
       timeStr='Disabled'; cls='is-blocked';
-    } else if(t){
-      timeStr=`${t.slice(0,2)}:${t.slice(2)}`; cls='';
-      const caution=getCautionForSlot(i);
-      if(caution==='earlier') { cls='is-caution-err'; cautionIcon='<span class="p3-sum-caution p3-sum-caution-err" title="Timing is before a previous event">✕</span>'; }
-      else if(caution) { cls='is-caution'; cautionIcon='<span class="p3-sum-caution" title="Timing has a warning — tap to review">⚠</span>'; }
+    } else if(tm){
+      timeStr=`${tm.slice(0,2)}:${tm.slice(2)}`; cls='';
+      const caution=getCautionForTurnoutSlot(t,i);
+      if(caution==='earlier'){cls='is-caution-err';cautionIcon='<span class="p3-sum-caution p3-sum-caution-err" title="Before previous event">✕</span>';}
+      else if(caution){cls='is-caution';cautionIcon='<span class="p3-sum-caution" title="Timing warning">⚠</span>';}
     } else if(hasSugg){
-      timeStr=`${String(S.timeSuggestH[i]).padStart(2,'0')}:${String(S.timeSuggestM[i]).padStart(2,'0')}`;
-      cls='is-suggested';
-      hint='<span class="p3-sum-hint">Suggested — tap to confirm</span>';
+      timeStr=`${String(t.timeSuggestH[i]).padStart(2,'0')}:${String(t.timeSuggestM[i]).padStart(2,'0')}`;
+      cls='is-suggested'; hint='<span class="p3-sum-hint">Suggested — tap to confirm</span>';
     } else {
       timeStr='—'; cls='is-unset';
     }
-    return `<div class="p3-summary-cell ${cls}" onclick="openTimingEditor(${i})" title="Click to edit">
+    return `<div class="p3-summary-cell ${cls}" onclick="openTimingEditor(${idx},${i})" title="Click to edit">
       <span class="p3-sum-label">${lbl} ✎</span>
-      <span class="p3-sum-time">${timeStr}${cautionIcon}</span>
-      ${hint}
-    </div>`;
+      <span class="p3-sum-time">${timeStr}${cautionIcon}</span>${hint}</div>`;
   }).join('');
 
-  content.innerHTML=`
-    <div class="p3-summary-activator">Activated by: <strong>${activatorText}</strong></div>
-    <div class="p3-summary-grid">${cellsHTML}</div>`;
-}
-function selectP3Preset(mode){
-  el('abtn-opsctr').classList.toggle('selected',mode==='OPS CTR');
-  el('abtn-headops').classList.toggle('selected',mode==='HEAD OPS');
-  el('abtn-others').classList.toggle('selected',mode==='others');
-  if(mode==='others'){
-    el('p3-others-wrap').classList.remove('hidden'); S.p3ActivatorMode='others';
-    const val=el('p3-others-input').value.trim();
-    S.p3PersonId=val?findOrAddPerson('',val):null; el('p3-others-input').focus();
-  }else{
-    el('p3-others-wrap').classList.add('hidden'); S.p3ActivatorMode=mode;
-    S.p3PersonId=findOrAddPerson('',mode);
-  }
-  renderP3ActivatorDisplay(); updateValidation();
-}
-function onP3OthersInput(){
-  const val=el('p3-others-input').value.trim().toUpperCase();
-  S.p3PersonId=val?findOrAddPerson('',val):null; renderP3ActivatorDisplay(); updateValidation();
-}
-function renderP3Activator(){
-  ['abtn-opsctr','abtn-headops','abtn-others'].forEach(id=>el(id).classList.remove('selected'));
-  el('p3-others-wrap').classList.add('hidden'); el('p3-others-input').value='';
-  el('p3-activator-current').classList.add('hidden');
-  S.p3ActivatorMode=null; S.p3PersonId=null;
-}
-function renderP3ActivatorDisplay(){
-  const disp=el('p3-activator-current'); const p=getPersonById(S.p3PersonId);
-  if(p){disp.textContent='✓ '+(p.rank?`${p.rank} ${p.name}`:p.name);disp.classList.remove('hidden');}
-  else disp.classList.add('hidden');
+  return `<div class="turnout-card" id="turnout-card-${idx}">
+    <div class="turnout-card-header">
+      <span class="turnout-card-title">Turnout #${idx+1}</span>
+      <button class="turnout-remove-btn" onclick="removeTurnout(${idx})" title="Remove">✕</button>
+    </div>
+    <div class="turnout-type-row">
+      <label class="field-label" style="margin-bottom:4px">What turned out?</label>
+      <div class="turnout-type-presets">${typeButtonsHTML}</div>${typeTickHTML}${customTypeHTML}
+    </div>
+    <div class="p3-activator-group" style="margin-top:12px">
+      <label class="field-label">Activated by</label>
+      <div class="p3-activator-presets">${activatorHTML}</div>${customActHTML}${actCurrentHTML}
+    </div>
+    <div class="p3-summary-grid" style="margin-top:14px">${cellsHTML}</div>
+  </div>`;
 }
 
 // =============================================
@@ -636,7 +729,9 @@ function refreshDrums(){
   S.timeSuggested=    [false, false, false, false, false];
   S.timeSuggestH=     [null,  null,  null,  null,  null];
   S.timeSuggestM=     [null,  null,  null,  null,  null];
+  S.turnouts=[];
   for(let i=0;i<5;i++){renderDrum(i);renderTimingFeedback(i);renderDisableButton(i);}
+  renderTurnoutList();
 }
 
 // =============================================
@@ -784,14 +879,14 @@ function blockEvent(idx){
   S.timeSuggested[idx]=false;S.timeSuggestH[idx]=null;S.timeSuggestM[idx]=null;
   renderDrum(idx);renderDisableButton(idx);renderTimingFeedback(idx);
   for(let i=0;i<5;i++) if(i!==idx) renderTimingFeedback(i);
-  recalcSuggestions(); renderP3Summary(); updateValidation();
+  recalcSuggestions(); updateValidation();
 }
 
 function unblockEvent(idx){
   S.timeBlocked[idx]=false;
   renderDrum(idx);renderDisableButton(idx);renderTimingFeedback(idx);
   for(let i=0;i<5;i++) if(i!==idx) renderTimingFeedback(i);
-  recalcSuggestions(); renderP3Summary(); updateValidation();
+  recalcSuggestions(); updateValidation();
 }
 
 function toggleBlock(idx){
@@ -914,36 +1009,33 @@ function validate(){
   const errs=[];
   if(!S.currentRotaPersonId)  errs.push({section:'current-ic', msg:'Select the Current IC.'});
   if(!S.incomingRotaPersonId) errs.push({section:'incoming-ic',msg:'Select the Incoming IC.'});
-  if(S.hasP3){
-    if(!S.p3PersonId) errs.push({section:'p3',msg:'Select who activated P3.'});
-    const bp=validateBlockPattern();
+  S.turnouts.forEach((t,ti)=>{
+    const num=ti+1;
+    if(!t.personId) errs.push({section:'p3',msg:`Turnout #${num}: Select who activated it.`});
+    const bp=validateBlockPatternFor(t);
     if(bp==='all')
-      errs.push({section:'p3',msg:'All P3 events are disabled. Re-enable at least one, or turn off P3 Turnout.'});
+      errs.push({section:'p3',msg:`Turnout #${num}: All events disabled — re-enable at least one or remove this turnout.`});
     else if(bp)
-      errs.push({section:'p3',msg:'Invalid disable pattern — disabled events must be consecutive and start from the first timing or end at the last.'});
+      errs.push({section:'p3',msg:`Turnout #${num}: Invalid disable pattern — disabled events must be consecutive from start or end.`});
     for(let i=0;i<5;i++){
-      if(S.timeBlocked[i]) continue;
+      if(t.timeBlocked[i]) continue;
       const lbl=`"${TIMING_LABELS[i]}"`;
-      if(!S.p3Times[i])
-        errs.push({section:'p3',msg:`P3 timing ${lbl}: not set yet.`});
+      if(!t.p3Times[i])
+        errs.push({section:'p3',msg:`Turnout #${num} ${lbl}: not set yet.`});
       else{
-        const c=getCautionForSlot(i);
-        if(c==='earlier')
-          errs.push({section:'p3',msg:`P3 timing ${lbl}: must be after the previous timing.`});
-        else if(c==='oob')
-          errs.push({section:'p3',msg:`P3 timing ${lbl}: outside shift window — disable it if it did not occur this shift.`});
-        else if(c==='gap')
-          errs.push({section:'p3',msg:`P3 timing ${lbl}: gap over 2 hours — confirm or dismiss.`});
+        const c=getCautionForTurnoutSlot(t,i);
+        if(c==='earlier') errs.push({section:'p3',msg:`Turnout #${num} ${lbl}: must be after the previous timing.`});
+        else if(c==='oob') errs.push({section:'p3',msg:`Turnout #${num} ${lbl}: outside shift window — disable if it did not occur this shift.`});
+        else if(c==='gap') errs.push({section:'p3',msg:`Turnout #${num} ${lbl}: gap over 2 hours — confirm or dismiss.`});
       }
     }
-  }
+  });
   if(S.detectedShiftLabel==='Night'&&S.redconCautionState!==null&&!S.redconCautionDismissed)
-    errs.push({section:'redcon',msg:'REDCON: '+( S.redconCautionState==='empty'?'no data entered — paste the REDCON email or click "Yes, proceed".':'no alpha names found — paste valid data or click "Yes, proceed".')});
+    errs.push({section:'redcon',msg:'REDCON: '+(S.redconCautionState==='empty'?'no data entered — paste the REDCON email or click "Yes, proceed".':'no alpha names found — paste valid data or click "Yes, proceed".')});
   return errs;
 }
 
 function updateValidation(){
-  renderP3Summary();
   const errs=validate();
   ['current-ic','incoming-ic','p3'].forEach(sec=>{
     const has=errs.some(e=>e.section===sec);
@@ -962,20 +1054,22 @@ function updateValidation(){
 // =============================================
 // ALERT SYSTEM
 // =============================================
-function showAlert({type='error',title,bodyHTML,buttons=[],dismissAnywhere=false,resetOnClose=false,dismissHint=null}){
+function showAlert({type='error',title,bodyHTML,buttons=[],dismissAnywhere=false,resetOnClose=false,dismissHint=null,nonDismissible=false}){
   el('modal-box').className='modal-box alert-'+type;
   el('modal-title').innerHTML=title; el('modal-body').innerHTML=bodyHTML;
   const acts=el('modal-actions'); acts.innerHTML='';
   buttons.forEach(btn=>{
     const b=document.createElement('button'); b.textContent=btn.label;
+    if(btn.danger) b.classList.add('danger');
     b.onclick=()=>{closeModal();if(btn.cb)btn.cb();}; acts.appendChild(b);
   });
   const hint=el('modal-dismiss-hint');
   if(dismissHint){hint.textContent=dismissHint;hint.classList.remove('hidden');}
   else hint.classList.add('hidden');
   const ov=el('modal-overlay');
-  if(dismissAnywhere) ov.dataset.dismissAnywhere='1'; else delete ov.dataset.dismissAnywhere;
-  if(resetOnClose)    ov.dataset.resetOnClose='1';    else delete ov.dataset.resetOnClose;
+  if(dismissAnywhere)   ov.dataset.dismissAnywhere='1';   else delete ov.dataset.dismissAnywhere;
+  if(resetOnClose)      ov.dataset.resetOnClose='1';      else delete ov.dataset.resetOnClose;
+  if(nonDismissible)    ov.dataset.nonDismissible='1';    else delete ov.dataset.nonDismissible;
   ov.classList.remove('hidden');
 }
 
@@ -984,22 +1078,23 @@ function closeModal(){
   el('modal-dismiss-hint').classList.add('hidden');
   el('modal-box').className='modal-box';
   const sr=ov.dataset.resetOnClose==='1';
-  delete ov.dataset.dismissAnywhere; delete ov.dataset.resetOnClose;
+  delete ov.dataset.dismissAnywhere; delete ov.dataset.resetOnClose; delete ov.dataset.nonDismissible;
   if(sr) resetAllState();
 }
 
 function resetAllState(){
-  S.hasP3=false;S.p3PersonId=null;S.p3ActivatorMode=null;
+  S.turnouts=[];S.activeTurnoutIdx=null;
   S.currentRotaPersonId=null;S.incomingRotaPersonId=null;
   S.redconData=[];S.redconCautionState=null;S.redconCautionDismissed=false;
-  setP3(false); el('redcon-paste').value='';
-  renderRedconTable(); renderRedconCaution(); renderP3Activator(); refreshDrums();
+  el('redcon-paste').value='';
+  renderRedconTable(); renderRedconCaution(); renderTurnoutList(); refreshDrums();
   setShiftMode('auto');
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
   el('modal-overlay').addEventListener('click',e=>{
     const ov=el('modal-overlay');
+    if(ov.dataset.nonDismissible==='1') return;
     if(e.target===ov||ov.dataset.dismissAnywhere==='1') closeModal();
   });
 });
@@ -1028,7 +1123,7 @@ function proceedGenerate(){
       type:'success',
       title:'✓ Code Copied!',
       bodyHTML:'Open Excel and run <strong>GenerateFromClipboard</strong> via <strong>Alt+F8</strong>.',
-      buttons:[],dismissAnywhere:true,resetOnClose:true,
+      buttons:[],dismissAnywhere:true,
       dismissHint:'Click anywhere to dismiss',
     });
   }).catch(()=>{
@@ -1037,7 +1132,7 @@ function proceedGenerate(){
       type:'success',
       title:'✓ Code Ready',
       bodyHTML:'Copy the code from the prompt, then open Excel and run <strong>GenerateFromClipboard</strong> via <strong>Alt+F8</strong>.',
-      buttons:[],dismissAnywhere:true,resetOnClose:true,
+      buttons:[],dismissAnywhere:true,
       dismissHint:'Click anywhere to dismiss',
     });
   });
@@ -1046,29 +1141,29 @@ function proceedGenerate(){
 function buildClipboardString(){
   const st=S.shiftMode==='auto'?'AUTO':'OVERRIDE';
   const ss=S.shiftMode==='override'?fmtDate(S.overrideDate)+'-'+S.overrideShiftType:'';
-  const p3t=S.hasP3?[0,1,2,3,4].map(i=>S.timeBlocked[i]?'BLOCKED':(S.p3Times[i]||'')):['','','','',''];
-  const parts=['OPSLOG','2',st,ss,String(S.currentRotaPersonId),String(S.incomingRotaPersonId),
-    S.hasP3?'YES':'NO',S.hasP3?String(S.p3PersonId):'',
-    p3t[0],p3t[1],p3t[2],p3t[3],p3t[4]];
-  // Always build the appliance list from S.appliances (the authoritative configured list).
-  // Overlay IC person IDs from S.redconData where available; 0 means no IC assigned.
-  // This ensures:
-  //  (a) appliances removed from Settings are never sent even if they were in a pasted REDCON email
-  //  (b) all configured appliances are always sent even when the user proceeds without REDCON data
-  const rf = S.appliances
-    .map(a => {
-      const rd = S.redconData.find(r => r.code === a.code);
-      return { code: a.code, personId: (rd && rd.personId) ? rd.personId : 0 };
-    })
-    .sort((a, b) => {
-      const sa = getStnFromCode(a.code)||'', sb = getStnFromCode(b.code)||'';
-      return sa !== sb ? sa.localeCompare(sb) : a.code.localeCompare(b.code, undefined, {numeric: true});
-    });
-  parts.push(String(rf.length)); rf.forEach(r => parts.push(r.code, String(r.personId)));
-  const uPIds=new Set(); if(S.hasP3&&S.p3PersonId!=null)uPIds.add(S.p3PersonId);
+  const parts=['OPSLOG','3',st,ss,String(S.currentRotaPersonId),String(S.incomingRotaPersonId)];
+
+  // TURNOUTS section
+  parts.push('TURNOUTS',String(S.turnouts.length));
+  S.turnouts.forEach(t=>{
+    parts.push(t.type||'P3', String(t.personId!=null?t.personId:''));
+    for(let i=0;i<5;i++) parts.push(t.timeBlocked[i]?'BLOCKED':(t.p3Times[i]||''));
+  });
+
+  // REDCON section
+  const rf=S.appliances
+    .map(a=>{ const rd=S.redconData.find(r=>r.code===a.code); return {code:a.code,personId:(rd&&rd.personId)?rd.personId:0}; })
+    .sort((a,b)=>{ const sa=getStnFromCode(a.code)||'',sb=getStnFromCode(b.code)||''; return sa!==sb?sa.localeCompare(sb):a.code.localeCompare(b.code,undefined,{numeric:true}); });
+  parts.push(String(rf.length)); rf.forEach(r=>parts.push(r.code,String(r.personId)));
+
+  // PEOPLE section
+  const uPIds=new Set();
+  S.turnouts.forEach(t=>{ if(t.personId!=null) uPIds.add(t.personId); });
   rf.forEach(r=>{ if(r.personId) uPIds.add(r.personId); });
   const pDB=loadPeopleDB(); const uP=[...uPIds].map(id=>pDB.people.find(p=>p.id===id)).filter(Boolean);
   parts.push('PEOPLE',String(uP.length)); uP.forEach(p=>parts.push(String(p.id),p.rank||'',p.name||''));
+
+  // ROTA_PEOPLE section
   const uRIds=new Set([S.currentRotaPersonId,S.incomingRotaPersonId].filter(id=>id!=null));
   const rDB=loadRotaPeopleDB(); const uRP=[...uRIds].map(id=>rDB.people.find(p=>p.id===id)).filter(Boolean);
   parts.push('ROTA_PEOPLE',String(uRP.length)); uRP.forEach(p=>parts.push(String(p.id),p.rota||'',p.rank||'',p.name||''));
@@ -1116,22 +1211,32 @@ function restoreTimingState(snap){
   updateValidation();
 }
 
-function openTimingEditor(idx){
-  if(!S.hasP3) return;
-  S.activeTimingIdx=idx;
+function openTimingEditor(turnoutIdx, slotIdx){
+  const t=S.turnouts[turnoutIdx]; if(!t) return;
+  S.activeTurnoutIdx=turnoutIdx; S.activeTimingIdx=slotIdx;
+
+  // Load turnout state into global scratchpad
+  S.timeH=[...t.timeH]; S.timeM=[...t.timeM];
+  S.timeAutoSet=[...t.timeAutoSet]; S.timeBlocked=[...t.timeBlocked];
+  S.timeGapDismissed=[...t.timeGapDismissed]; S.p3Times=[...t.p3Times];
+  S.timeSuggested=[...t.timeSuggested];
+  S.timeSuggestH=[...t.timeSuggestH]; S.timeSuggestM=[...t.timeSuggestM];
+
   S._timingSnapshot=captureTimingState();
-  // If slot has a suggestion but no committed value, pre-load the suggestion into the drum
-  if(S.timeSuggested[idx] && S.timeH[idx]===null){
-    S.timeH[idx]=S.timeSuggestH[idx];
-    S.timeM[idx]=S.timeSuggestM[idx];
-    renderDrum(idx);
+
+  // Pre-load suggestion if slot is unset
+  if(S.timeSuggested[slotIdx]&&S.timeH[slotIdx]===null){
+    S.timeH[slotIdx]=S.timeSuggestH[slotIdx];
+    S.timeM[slotIdx]=S.timeSuggestM[slotIdx];
   }
-  // Show only the active timing cell
+
+  // Show only the active timing cell; render all drums from loaded state
   for(let i=0;i<5;i++){
-    const c=el(`timing-cell-${i}`);
-    if(c) c.style.display=i===idx?'':'none';
+    const c=el(`timing-cell-${i}`); if(c) c.style.display=i===slotIdx?'':'none';
+    renderDrum(i); renderTimingFeedback(i); renderDisableButton(i);
   }
-  el('timing-popup-title').textContent=`P3 — ${TIMING_LABELS[idx]}`;
+
+  el('timing-popup-title').textContent=`${t.type||'Turnout'} — ${TIMING_LABELS[slotIdx]}`;
   el('p3-editor-overlay').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
@@ -1143,19 +1248,36 @@ function cancelTimingEditor(){
   S._timingSnapshot=null;
   el('p3-editor-overlay').classList.add('hidden');
   document.body.style.overflow='';
-  renderP3Summary();
 }
 function confirmTimingEditor(){
   const idx=S.activeTimingIdx;
-  // Clear the suggestion for this slot (it's now committed)
+  const turnoutIdx=S.activeTurnoutIdx;
+  const t=S.turnouts[turnoutIdx]; if(!t) return;
+
+  // Commit the time if user accepted the pre-loaded suggestion without touching the drum
+  // (stepDrum would have committed it; if not touched, p3Times is still '' even though H/M are set)
+  if(!S.timeBlocked[idx] && S.timeH[idx]!==null && S.timeM[idx]!==null && !S.p3Times[idx]){
+    S.p3Times[idx]=String(S.timeH[idx]).padStart(2,'0')+String(S.timeM[idx]).padStart(2,'0');
+  }
+
+  // Clear the suggestion for this slot (now committed)
   S.timeSuggested[idx]=false; S.timeSuggestH[idx]=null; S.timeSuggestM[idx]=null;
+
+  // Re-derive suggestions for subsequent slots
+  recalcSuggestions();
+
+  // Copy scratchpad back to turnout
+  t.timeH=[...S.timeH]; t.timeM=[...S.timeM];
+  t.timeAutoSet=[...S.timeAutoSet]; t.timeBlocked=[...S.timeBlocked];
+  t.timeGapDismissed=[...S.timeGapDismissed]; t.p3Times=[...S.p3Times];
+  t.timeSuggested=[...S.timeSuggested];
+  t.timeSuggestH=[...S.timeSuggestH]; t.timeSuggestM=[...S.timeSuggestM];
+
   S._timingSnapshot=null;
   el('p3-editor-overlay').classList.add('hidden');
   document.body.style.overflow='';
-  // Re-derive suggestions for subsequent unset slots
-  recalcSuggestions();
-  renderP3Summary();
-  showToast(`✓ P3 "${TIMING_LABELS[idx]}" updated`);
+  renderTurnoutList(); updateValidation();
+  showToast(`✓ ${t.type||'Turnout'} "${TIMING_LABELS[idx]}" updated`);
 }
 
 // =============================================
@@ -1189,11 +1311,18 @@ function updateOverrideDateChip(){
 function openSettings(){
   el('settings-overlay').classList.remove('hidden');
   document.body.style.overflow='hidden';
+  // Render RDR settings lists if they exist (combined panel)
+  if (typeof rdrRenderSettingsList === 'function') {
+    rdrRenderSettingsList('ops');
+    rdrRenderSettingsList('ems');
+  }
 }
 function closeSettings(e){
   if(e&&e.target!==el('settings-overlay')) return;
   el('settings-overlay').classList.add('hidden');
   document.body.style.overflow='';
+  // Rebuild RDR grid in case rota entries changed
+  if (typeof rdrBuildAttGrid === 'function') rdrBuildAttGrid();
 }
 
 function openHelp(){
@@ -1227,12 +1356,18 @@ function init(){
   saveRotaPeopleDB({nextId:1, people:[]});
   S.rotas.forEach(p => findOrAddRotaPerson(p.rota, p.rank, p.name));
 
+  // Seed the shift-change tracker so first clock tick doesn't fire a false popup
+  const now = new Date();
+  const totalMin = now.getHours() * 60 + now.getMinutes();
+  _lastKnownShiftLabel = (totalMin >= 18*60 || totalMin < 8*60) ? 'Night' : 'Day';
+
   buildDrums();
   applyShiftResult(computeShift(new Date()));
   initCalendar();
   renderRotaSettingsList();
   renderApplianceSettingsList();
   updateValidation();
+  // RDR grid is rebuilt in initRdr() which also runs on DOMContentLoaded
 }
 document.addEventListener('DOMContentLoaded',init);
 
@@ -1258,6 +1393,70 @@ function toggleTheme(){
   applyTheme(current === 'dark' ? 'light' : 'dark');
 }
 
+// =============================================
+// SHIFT-CHANGE POPUP
+// =============================================
+let _lastKnownShiftLabel = null;  // initialised in init()
+let _shiftChangePopupActive = false;
+
+function _checkShiftChange(now) {
+  if (_shiftChangePopupActive) return;
+  const totalMin = now.getHours() * 60 + now.getMinutes();
+  const currentLabel = (totalMin >= 18*60 || totalMin < 8*60) ? 'Night' : 'Day';
+  if (_lastKnownShiftLabel !== null && _lastKnownShiftLabel !== currentLabel) {
+    // Shift just flipped — check if there's meaningful state worth prompting about
+    const hasState = S.currentRotaPersonId !== null || S.incomingRotaPersonId !== null ||
+                     S.turnouts.length > 0 || (el('redcon-paste') && el('redcon-paste').value.trim());
+    if (hasState) {
+      _shiftChangePopupActive = true;
+      _showShiftChangePopup(_lastKnownShiftLabel);
+    }
+  }
+  _lastKnownShiftLabel = currentLabel;
+}
+
+function _showShiftChangePopup(oldShiftLabel) {
+  // Work out the override target for "Keep" — the shift that just ended
+  const now = new Date();
+  let oldDate = new Date(now); oldDate.setHours(0,0,0,0);
+  let oldShiftType;
+  if (oldShiftLabel === 'Day') {
+    // Day just ended → night started: old date = today, old type = D
+    oldShiftType = 'D';
+  } else {
+    // Night just ended → day started: night shift started yesterday
+    oldDate.setDate(oldDate.getDate() - 1);
+    oldShiftType = 'N';
+  }
+  const shiftIcon = oldShiftLabel === 'Day' ? '🌤️' : '🌙';
+  showAlert({
+    type: 'error',
+    title: `⏰ ${oldShiftLabel} Shift Has Ended`,
+    bodyHTML: `The ${shiftIcon} <strong>${oldShiftLabel} shift</strong> has ended. Would you like to reset all fields for the new shift, or keep the current session?
+      <br><br><span style="font-size:13px;color:var(--text-2)">
+      <strong>Reset</strong> — clear everything and start fresh.<br>
+      <strong>Keep Session</strong> — retain all fields; the panel will switch to Override so your previous shift is preserved.
+      </span>`,
+    nonDismissible: true,
+    buttons: [
+      { label: 'Reset', danger: true, cb: () => {
+        _shiftChangePopupActive = false;
+        resetAllState();
+      }},
+      { label: 'Keep Session', cb: () => {
+        _shiftChangePopupActive = false;
+        // If currently in auto, lock to the old shift via override so IC rotas stay correct
+        if (S.shiftMode === 'auto') {
+          S.overrideDate = oldDate;
+          S.overrideShiftType = oldShiftType;
+          setShiftMode('override');
+        }
+        // If already on override, user has manually chosen a date+shift — leave it untouched
+      }},
+    ],
+  });
+}
+
 // Live clock with per-digit drum roll
 (function tickClock(){
   const pad = n => String(n).padStart(2,'0');
@@ -1274,6 +1473,7 @@ function toggleTheme(){
   function update(){
     const now = new Date();
     autoTheme(now.getHours());
+    _checkShiftChange(now);
     const s = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
     const digits = s.split('');
     const c = el('live-clock'); if(!c) return;
@@ -1301,3 +1501,552 @@ function toggleTheme(){
   update();
   setInterval(update, 1000);
 })();
+
+// =============================================
+// MAIN TAB SWITCHING
+// =============================================
+let _activeMainTab = 'opslog';
+
+function switchMainTab(tab) {
+  _activeMainTab = tab;
+  ['opslog', 'rdr'].forEach(t => {
+    el(`tab-btn-${t}`)?.classList.toggle('active', t === tab);
+    el(`view-${t}`)?.classList.toggle('hidden', t !== tab);
+  });
+  if (tab === 'rdr') {
+    // Rebuild grid in case rota settings changed while on ops-log tab
+    rdrBuildAttGrid();
+    rdrUpdateSubjectPreview();
+  }
+}
+
+// =============================================
+// RDR — CONSTANTS & STATE
+// =============================================
+const RDR_STATUS_OPTS = ['', 'IN', 'ON DUTY', 'MC', 'VL', 'HL', 'OIL', 'OFF DUTY', 'COURSE', 'RSO', 'ORD', 'DUTY', 'AWOL'];
+const RDR_STATUS_COLORS = {
+  'IN':'#34c759','ON DUTY':'#34c759','MC':'#ff3b30','AWOL':'#ff3b30',
+  'VL':'#ff9500','HL':'#ff9500','OIL':'#ff9500','OFF DUTY':'#ff9500',
+  'COURSE':'#ff9500','RSO':'#ff9500','ORD':'#ff9500','DUTY':'#ff9500',
+};
+// Longer prefixes first
+const RDR_STATUS_MAP = [
+  { prefix:'OFF DUTY HL', value:'HL'       },
+  { prefix:'OFF DUTY',    value:'OFF DUTY'  },
+  { prefix:'ON DUTY',     value:'ON DUTY'   },
+  { prefix:'COURSE',      value:'COURSE'    },
+  { prefix:'AWOL',        value:'AWOL'      },
+  { prefix:'DUTY',        value:'DUTY'      },
+  { prefix:'OIL',         value:'OIL'       },
+  { prefix:'RSO',         value:'RSO'       },
+  { prefix:'ORD',         value:'ORD'       },
+  { prefix:'MC',          value:'MC'        },
+  { prefix:'VL',          value:'VL'        },
+  { prefix:'HL',          value:'HL'        },
+  { prefix:'IN',          value:'IN'        },
+];
+const RDR_RANKS = ['PTE','LCP','CPL','SGT','SSG','WO','MWO','SWO','CWO',
+                   'ME4','ME5','2LT','LTA','CPT','MAJ','LTC','COL','BG','MG'];
+const RDR_SK = { OPS:'rdr2_ops', EMS:'rdr2_ems' };
+const RDR_DEFAULTS = {
+  ops:[
+    {rank:'LCP',name:'IRFAN'},{rank:'CPL',name:'RAZIN'},
+    {rank:'CPL',name:'RIZQ'},{rank:'LCP',name:'JEFF'},
+    {rank:'PTE',name:'HUZAIFAH'},{rank:'LCP',name:'ZACHARIAH'},
+    {rank:'LCP',name:'MARCUS'},{rank:'PTE',name:'MAHESHWARAN'},
+    {rank:'PTE',name:'KHAIRUL'},{rank:'LCP',name:'KAR KIT'},
+    {rank:'PTE',name:'FERDINAND'},{rank:'PTE',name:'IRYAN'},
+    {rank:'PTE',name:'GARRET'},{rank:'PTE',name:'MIRZA'},
+  ],
+  ems:[
+    {rank:'CPL',name:'KHAIRI'},{rank:'PTE',name:'DARWISY'},
+    {rank:'PTE',name:'CYRUS'},{rank:'LCP',name:'ZEN'},
+    {rank:'CPL',name:'WEN XUAN'},
+  ],
+};
+
+let rdrLists = { ops:[], ems:[] };
+let rdrSelectedShift = 'AM';
+let rdrSelectedDay   = 'WEEKDAY';
+
+// ── Persistence ───────────────────────────────────────────────
+function rdrLoadLists() {
+  for (const key of ['ops','ems']) {
+    const raw = localStorage.getItem(RDR_SK[key.toUpperCase()]);
+    rdrLists[key] = raw ? JSON.parse(raw) : RDR_DEFAULTS[key].map(p=>({...p}));
+  }
+}
+function rdrSaveLists(key) {
+  localStorage.setItem(RDR_SK[key.toUpperCase()], JSON.stringify(rdrLists[key]));
+}
+
+// ── Rota info from date ───────────────────────────────────────
+function getRdrRotaInfo() {
+  const dateVal = el('rdr-date')?.value;
+  if (!dateVal) return { amRota:'', pmRota:'', amPeople:[], pmPeople:[] };
+  const [y, mo, d] = dateVal.split('-').map(Number);
+  const dayRef   = new Date(y, mo-1, d, 9,  0, 0);
+  const nightRef = new Date(y, mo-1, d, 21, 0, 0);
+  const dayInfo   = computeShift(dayRef);
+  const nightInfo = computeShift(nightRef);
+  const amRota  = dayInfo.currentRota;
+  const pmRota  = nightInfo.currentRota;
+  const amPeople = S.rotas.filter(r => r.rota === amRota);
+  const pmPeople = S.rotas.filter(r => r.rota === pmRota);
+  return { amRota, pmRota, amPeople, pmPeople };
+}
+
+function rdrOnDateChange() {
+  rdrUpdateSubjectPreview();
+  rdrUpdateRotaInfo();
+  rdrBuildAttGrid();
+  // Re-run any pasted rollcalls against new rota lists
+  ['am','pm'].forEach(t => {
+    const ta = el(`rollcall-paste-${t}`);
+    if (ta && ta.value.trim()) rdrOnRollcallInput(t);
+  });
+}
+
+function rdrUpdateRotaInfo() {
+  const { amRota, pmRota } = getRdrRotaInfo();
+  const infoEl = el('rdr-rota-info');
+  if (!infoEl) return;
+  if (!amRota && !pmRota) { infoEl.classList.add('hidden'); return; }
+  infoEl.classList.remove('hidden');
+  const amChip = el('rdr-am-rota-chip');
+  const pmChip = el('rdr-pm-rota-chip');
+  const mkChip = (rota) => {
+    const n = rotaNum(rota);
+    return `<span class="rota-chip rc-${n}">${rota}</span>`;
+  };
+  if (amChip) amChip.innerHTML = amRota ? mkChip(amRota) : '—';
+  if (pmChip) pmChip.innerHTML = pmRota ? mkChip(pmRota) : '—';
+  // Update rollcall labels
+  const lam = el('rdr-label-am');
+  const lpm = el('rdr-label-pm');
+  if (lam) lam.innerHTML = `AM Rota ${amRota ? `<span class="rota-chip rc-${rotaNum(amRota)}" style="font-size:10px;padding:1px 7px">${amRota}</span>` : ''}`;
+  if (lpm) lpm.innerHTML = `PM Rota ${pmRota ? `<span class="rota-chip rc-${rotaNum(pmRota)}" style="font-size:10px;padding:1px 7px">${pmRota}</span>` : ''}`;
+}
+
+// ── Date / subject ─────────────────────────────────────────────
+function rdrGetDateStr() {
+  const raw = el('rdr-date')?.value;
+  if (!raw) return 'DD/MM/YY';
+  const [y,m,d] = raw.split('-');
+  return `${d}/${m}/${String(y).slice(2)}`;
+}
+function rdrUpdateSubjectPreview() {
+  const label = {AM:'AM Shift',PM:'PM Shift',FULL:'Full Shift'}[rdrSelectedShift] || rdrSelectedShift;
+  const prev = el('rdr-subject-preview');
+  if (prev) prev.textContent = `Subject: RDR report for ${rdrGetDateStr()} (${label})`;
+}
+
+// ── Attendance Grid ───────────────────────────────────────────
+function rdrBuildAttGrid() {
+  const grid = el('rdr-att-grid'); if (!grid) return;
+  grid.innerHTML = '';
+  const { amRota, pmRota, amPeople, pmPeople } = getRdrRotaInfo();
+
+  // Column headers
+  rdrAddCell(grid, 'att-col-hdr span-2', 'OFFICE HOURS');
+  rdrAddCell(grid, 'att-col-hdr span-2', 'RDR ROTA SHIFTS');
+
+  // OPS + AM section
+  const amLabel = amRota
+    ? `AM SHIFT <span class="rota-mini-chip rc-${rotaNum(amRota)}" style="background:var(--rota-${rotaNum(amRota)}-bg);color:var(--rota-${rotaNum(amRota)})">${amRota}</span>`
+    : 'AM SHIFT';
+  rdrAddCell(grid, 'att-section-hdr', 'OPS READINESS &amp; PLANNING TEAM');
+  const amHdr = rdrAddCell(grid, 'att-section-hdr', amLabel);
+  amHdr.innerHTML = amLabel; // allow HTML for chip
+
+  const upperLen = Math.max(rdrLists.ops.length, amPeople.length);
+  if (upperLen === 0) {
+    rdrAddCell(grid, 'att-empty-row', 'No names configured. Open Settings to add OPS names.');
+  } else {
+    for (let i = 0; i < upperLen; i++) {
+      rdrAddPersonRow(grid, rdrLists.ops[i], 'ops', i, amPeople[i], 'am', i);
+    }
+  }
+
+  // EMS + PM section
+  const pmLabel = pmRota
+    ? `PM SHIFT <span class="rota-mini-chip rc-${rotaNum(pmRota)}" style="background:var(--rota-${rotaNum(pmRota)}-bg);color:var(--rota-${rotaNum(pmRota)})">${pmRota}</span>`
+    : 'PM SHIFT';
+  rdrAddCell(grid, 'att-section-hdr', 'EMS TEAM');
+  const pmHdr = rdrAddCell(grid, 'att-section-hdr', pmLabel);
+  pmHdr.innerHTML = pmLabel;
+
+  const lowerLen = Math.max(rdrLists.ems.length, pmPeople.length);
+  if (lowerLen === 0) {
+    rdrAddCell(grid, 'att-empty-row', 'No names configured. Open Settings to add EMS names.');
+  } else {
+    for (let i = 0; i < lowerLen; i++) {
+      rdrAddPersonRow(grid, rdrLists.ems[i], 'ems', i, pmPeople[i], 'pm', i);
+    }
+  }
+}
+
+function rdrAddCell(parent, className, html) {
+  const d = document.createElement('div');
+  d.className = className;
+  d.innerHTML = html;
+  parent.appendChild(d);
+  return d;
+}
+
+function rdrAddPersonRow(grid, leftP, leftKey, leftIdx, rightP, rightKey, rightIdx) {
+  const lName = document.createElement('div');
+  lName.className = 'att-name-cell' + (leftP ? '' : ' empty');
+  lName.textContent = leftP ? `${leftP.rank} ${leftP.name}` : '';
+  grid.appendChild(lName);
+
+  const lStat = document.createElement('div');
+  lStat.className = 'att-status-cell' + (leftP ? '' : ' empty');
+  lStat.appendChild(leftP
+    ? rdrMakeStatusSelect(`rsel_${leftKey}_${leftIdx}`)
+    : Object.assign(document.createElement('select'), {className:'att-status-select', disabled:true, innerHTML:'<option>—</option>'}));
+  grid.appendChild(lStat);
+
+  const rName = document.createElement('div');
+  rName.className = 'att-name-cell' + (rightP ? '' : ' empty');
+  rName.textContent = rightP ? `${rightP.rank} ${rightP.name}` : '';
+  grid.appendChild(rName);
+
+  const rStat = document.createElement('div');
+  rStat.className = 'att-status-cell' + (rightP ? '' : ' empty');
+  rStat.appendChild(rightP
+    ? rdrMakeStatusSelect(`rsel_${rightKey}_${rightIdx}`)
+    : Object.assign(document.createElement('select'), {className:'att-status-select', disabled:true, innerHTML:'<option>—</option>'}));
+  grid.appendChild(rStat);
+}
+
+function rdrMakeStatusSelect(id) {
+  const sel = document.createElement('select');
+  sel.id = id; sel.className = 'att-status-select';
+  RDR_STATUS_OPTS.forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt; o.textContent = opt || '—';
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', () => rdrColorSelect(sel));
+  rdrColorSelect(sel);
+  return sel;
+}
+
+function rdrColorSelect(sel) {
+  const c = RDR_STATUS_COLORS[sel.value] || '';
+  sel.style.color = c; sel.style.fontWeight = c ? '700' : ''; sel.style.borderColor = c || '';
+}
+
+function rdrGetSelVal(key, idx) {
+  const s = el(`rsel_${key}_${idx}`); return s ? s.value : '';
+}
+function rdrSetSelVal(key, idx, value) {
+  const s = el(`rsel_${key}_${idx}`); if (!s) return;
+  const exists = [...s.options].some(o => o.value === value);
+  s.value = exists ? value : '';
+  rdrColorSelect(s);
+}
+
+// ── Rollcall Parser ───────────────────────────────────────────
+function rdrStripEmoji(str) {
+  return str
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
+    .replace(/[\u{2600}-\u{27BF}]/gu, '')
+    .replace(/[︀-️]/g, '')
+    .replace(/​/g, '')  // ZWJ
+    .replace(/[✅❌⚠️]/g, '');
+}
+
+function rdrDetectStatus(raw) {
+  const upper = rdrStripEmoji(raw).toUpperCase().replace(/\s+/g,' ').trim();
+  for (const {prefix,value} of RDR_STATUS_MAP) {
+    if (upper === prefix || upper.startsWith(prefix+' ') || upper.startsWith(prefix+'(')) return value;
+  }
+  return null;
+}
+
+function rdrStartsWithRank(name) {
+  return RDR_RANKS.some(r => name === r || name.startsWith(r+' '));
+}
+
+function rdrMatchInList(rollcallName, list) {
+  const rc = rollcallName.toUpperCase().trim();
+  for (let i = 0; i < list.length; i++) {
+    if ((list[i].rank+' '+list[i].name).toUpperCase().trim() === rc) return i;
+  }
+  for (let i = 0; i < list.length; i++) {
+    const full = (list[i].rank+' '+list[i].name).toUpperCase().trim();
+    if (full.startsWith(rc) || rc.startsWith(full)) return i;
+  }
+  return -1;
+}
+
+function rdrOnRollcallInput(target) {
+  const textEl = el(`rollcall-paste-${target}`);
+  const resEl  = el(`rollcall-results-${target}`);
+  const text   = textEl.value;
+  if (!text.trim()) { resEl.classList.add('hidden'); return; }
+  rdrParseAndApply(text, target, resEl);
+}
+
+function rdrParseAndApply(text, target, resEl) {
+  const lines = text.split('\n');
+  // Auto-detect date
+  for (const line of lines) {
+    const m = line.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+    if (m) {
+      const dd=m[1].padStart(2,'0'), mm=m[2].padStart(2,'0'), yyyy=m[3];
+      el('rdr-date').value = `${yyyy}-${mm}-${dd}`;
+      rdrUpdateSubjectPreview(); rdrUpdateRotaInfo(); rdrBuildAttGrid();
+      break;
+    }
+  }
+
+  const { amPeople, pmPeople } = getRdrRotaInfo();
+  const searchMap = {
+    oh: [{ key:'ops', list:rdrLists.ops }, { key:'ems', list:rdrLists.ems }],
+    am: [{ key:'am',  list:amPeople }],
+    pm: [{ key:'pm',  list:pmPeople }],
+  };
+  const searches = searchMap[target] || searchMap.oh;
+
+  const matched = [], unmatched = [];
+  for (const rawLine of lines) {
+    const line = rdrStripEmoji(rawLine).replace(/—/g,'-').replace(/–/g,'-').trim();
+    if (!line) continue;
+    const dashMatch = line.match(/^(.+?)\s+-\s+(.+)$/);
+    if (!dashMatch) continue;
+    const namePart   = dashMatch[1].trim().toUpperCase();
+    const statusPart = dashMatch[2].trim();
+    if (!rdrStartsWithRank(namePart)) continue;
+    const status = rdrDetectStatus(statusPart);
+    if (!status) continue;
+
+    let found = false;
+    for (const { key, list } of searches) {
+      const idx = rdrMatchInList(namePart, list);
+      if (idx >= 0) {
+        rdrSetSelVal(key, idx, status);
+        matched.push({ name: namePart, status });
+        found = true; break;
+      }
+    }
+    if (!found) unmatched.push({ name: namePart, status });
+  }
+  rdrRenderResults(matched, unmatched, resEl);
+}
+
+function rdrRenderResults(matched, unmatched, container) {
+  container.innerHTML = ''; container.classList.remove('hidden');
+  if (!matched.length && !unmatched.length) {
+    container.innerHTML = '<div class="rollcall-no-match">No recognisable entries found.</div>'; return;
+  }
+  if (matched.length) {
+    const t = document.createElement('div');
+    t.className = 'rollcall-result-title matched-title';
+    t.textContent = `✓ ${matched.length} matched`;
+    container.appendChild(t);
+    const ul = document.createElement('div'); ul.className = 'rollcall-result-list';
+    matched.forEach(m => {
+      const row = document.createElement('div'); row.className = 'rollcall-match-row';
+      const c = RDR_STATUS_COLORS[m.status] || 'var(--text-2)';
+      row.innerHTML = `<span class="rollcall-match-name">${m.name}</span><span class="rollcall-match-status" style="color:${c}">${m.status}</span>`;
+      ul.appendChild(row);
+    });
+    container.appendChild(ul);
+  }
+  if (unmatched.length) {
+    const t = document.createElement('div');
+    t.className = 'rollcall-result-title unmatched-title';
+    t.textContent = `⚠ ${unmatched.length} not in list`;
+    container.appendChild(t);
+    const ul = document.createElement('div'); ul.className = 'rollcall-result-list';
+    unmatched.forEach(u => {
+      const row = document.createElement('div'); row.className = 'rollcall-unmatch-row';
+      row.textContent = u.name; ul.appendChild(row);
+    });
+    container.appendChild(ul);
+  }
+}
+
+// ── Generate RDR code ─────────────────────────────────────────
+function rdrGenerate() {
+  if (!el('rdr-date')?.value) {
+    showAlert({ type:'error', title:'Missing Date', bodyHTML:'Please select a report date.', buttons:[{label:'OK'}] });
+    return;
+  }
+  const { amPeople, pmPeople } = getRdrRotaInfo();
+  const parts = ['RDR2', rdrGetDateStr(), rdrSelectedShift, rdrSelectedDay];
+
+  function appendList(key, list) {
+    parts.push(String(list.length));
+    list.forEach((p, i) => parts.push(p.rank, p.name, rdrGetSelVal(key, i)));
+  }
+  appendList('ops', rdrLists.ops);
+  appendList('ems', rdrLists.ems);
+  appendList('am',  amPeople);
+  appendList('pm',  pmPeople);
+  for (let n = 41; n <= 45; n++) parts.push('');
+  const code = parts.join('~');
+
+  navigator.clipboard.writeText(code).then(() => {
+    showToast('RDR code copied to clipboard!');
+    const btn = el('rdr-generate-btn');
+    const orig = btn.textContent;
+    btn.textContent = '✓  Code Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 2500);
+  }).catch(() => {
+    showAlert({ type:'error', title:'Copy Failed', bodyHTML:'Could not write to clipboard. Please try again.', buttons:[{label:'OK'}] });
+  });
+}
+
+// ── RDR Settings ──────────────────────────────────────────────
+let _rdrDragSrc = null, _rdrDragTab = null;
+
+function rdrRenderSettingsList(tab) {
+  const container = el(`rdr-settings-list-${tab}`); if (!container) return;
+  container.innerHTML = '';
+  const list = rdrLists[tab];
+  if (!list.length) {
+    container.innerHTML = '<div class="settings-empty-hint">No entries yet — add names below.</div>'; return;
+  }
+  const body = document.createElement('div');
+  body.className = 'rota-entries-body';
+  body.id = `rdr-body-${tab}`;
+  list.forEach((p, i) => body.appendChild(_rdrMakeRow(tab, i, p)));
+  container.appendChild(body);
+  _rdrInitDrag(body, tab);
+}
+
+function _rdrMakeRow(tab, i, p) {
+  const row = document.createElement('div');
+  row.className = 'rota-entry-row'; row.dataset.idx = i; row.draggable = true;
+  row.innerHTML = `
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
+    <span class="rota-entry-rank">${esc(p.rank||'')}</span>
+    <span class="rota-entry-name">${esc(p.name)}</span>
+    <button class="entry-edit-btn"   onclick="rdrEditEntry('${tab}',${i})"   title="Edit">✎</button>
+    <button class="entry-remove-btn" onclick="rdrRemoveEntry('${tab}',${i})" title="Remove">✕</button>`;
+  return row;
+}
+
+function rdrEditEntry(tab, i) {
+  const p = rdrLists[tab][i];
+  el(`rdr-rank-${tab}`).value = p.rank || '';
+  el(`rdr-name-${tab}`).value = p.name;
+  const btn = el(`rdr-add-btn-${tab}`);
+  btn.textContent = 'Save'; btn.dataset.editIdx = i;
+  el(`rdr-rank-${tab}`).focus();
+}
+
+function rdrRemoveEntry(tab, i) {
+  showConfirmRdr(`Remove "${(rdrLists[tab][i].rank?rdrLists[tab][i].rank+' ':'')}${rdrLists[tab][i].name}"?`, () => {
+    rdrLists[tab].splice(i, 1); rdrSaveLists(tab); rdrRenderSettingsList(tab);
+  });
+}
+
+function rdrAddEntry(tab) {
+  const rankEl = el(`rdr-rank-${tab}`), nameEl = el(`rdr-name-${tab}`);
+  const addBtn = el(`rdr-add-btn-${tab}`);
+  const rank = rankEl.value.trim().toUpperCase();
+  const name = nameEl.value.trim().toUpperCase();
+  if (!name) { showAlert({type:'error',title:'Missing Name',bodyHTML:'Please enter a name.',buttons:[{label:'OK'}]}); return; }
+  const editIdx = parseInt(addBtn.dataset.editIdx ?? '-1');
+  if (editIdx >= 0) {
+    rdrLists[tab][editIdx] = { rank, name };
+    addBtn.textContent = '+ Add'; delete addBtn.dataset.editIdx;
+  } else {
+    rdrLists[tab].push({ rank, name });
+  }
+  rankEl.value = ''; nameEl.value = '';
+  rdrSaveLists(tab); rdrRenderSettingsList(tab);
+  showToast(`✓ ${name} added to ${tab.toUpperCase()}`);
+}
+
+function rdrImportEntries(tab) {
+  const text = el(`rdr-import-${tab}`)?.value.trim(); if (!text) return;
+  const lines = text.split(/[\n,]+/).map(l => l.trim()).filter(Boolean);
+  let added = 0;
+  for (const line of lines) {
+    const parts = line.toUpperCase().trim().split(/\s+/);
+    if (parts.length >= 2 && RDR_RANKS.includes(parts[0])) {
+      rdrLists[tab].push({ rank: parts[0], name: parts.slice(1).join(' ') }); added++;
+    } else if (parts.length >= 1 && parts[0]) {
+      rdrLists[tab].push({ rank:'', name: parts.join(' ') }); added++;
+    }
+  }
+  if (added > 0) {
+    el(`rdr-import-${tab}`).value = '';
+    rdrSaveLists(tab); rdrRenderSettingsList(tab);
+    showToast(`✓ ${added} ${added===1?'entry':'entries'} imported`);
+  } else { showToast('No new entries to import'); }
+}
+
+function showConfirmRdr(msg, onConfirm) {
+  showAlert({
+    type:'info', title:'Confirm', bodyHTML:msg,
+    buttons:[{label:'Cancel'},{label:'Remove',cb:onConfirm}],
+  });
+}
+
+function _rdrInitDrag(container, tab) {
+  container.addEventListener('dragstart', e => {
+    const row = e.target.closest('.rota-entry-row'); if (!row) return;
+    _rdrDragSrc = row; _rdrDragTab = tab;
+    setTimeout(() => row.classList.add('drag-active'), 0);
+  });
+  container.addEventListener('dragend', () => {
+    if (_rdrDragSrc) _rdrDragSrc.classList.remove('drag-active');
+    container.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
+    _rdrDragSrc = null;
+  });
+  container.addEventListener('dragover', e => {
+    e.preventDefault();
+    const row = e.target.closest('.rota-entry-row');
+    if (!row || row === _rdrDragSrc) return;
+    container.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
+    row.classList.add('drag-over');
+  });
+  container.addEventListener('drop', e => {
+    e.preventDefault();
+    const row = e.target.closest('.rota-entry-row');
+    if (!row || row === _rdrDragSrc || _rdrDragTab !== tab) return;
+    const srcIdx = parseInt(_rdrDragSrc.dataset.idx);
+    const dstIdx = parseInt(row.dataset.idx);
+    const item = rdrLists[tab].splice(srcIdx, 1)[0];
+    rdrLists[tab].splice(dstIdx, 0, item);
+    rdrSaveLists(tab); rdrRenderSettingsList(tab);
+  });
+}
+
+// ── Init RDR ──────────────────────────────────────────────────
+function initRdr() {
+  rdrLoadLists();
+
+  const today = new Date().toISOString().slice(0,10);
+  const dateEl = el('rdr-date'); if (dateEl) dateEl.value = today;
+
+  const shiftBtns = el('rdr-shift-btns');
+  if (shiftBtns) shiftBtns.addEventListener('click', e => {
+    const btn = e.target.closest('[data-shift]'); if (!btn) return;
+    rdrSelectedShift = btn.dataset.shift;
+    shiftBtns.querySelectorAll('.toggle-btn').forEach(b => b.classList.toggle('active', b===btn));
+    rdrUpdateSubjectPreview();
+  });
+
+  const dayBtns = el('rdr-day-btns');
+  if (dayBtns) dayBtns.addEventListener('click', e => {
+    const btn = e.target.closest('[data-day]'); if (!btn) return;
+    rdrSelectedDay = btn.dataset.day;
+    dayBtns.querySelectorAll('.toggle-btn').forEach(b => b.classList.toggle('active', b===btn));
+  });
+
+  rdrUpdateSubjectPreview();
+  rdrUpdateRotaInfo();
+  rdrBuildAttGrid();
+  rdrRenderSettingsList('ops');
+  rdrRenderSettingsList('ems');
+}
+
+document.addEventListener('DOMContentLoaded', initRdr);

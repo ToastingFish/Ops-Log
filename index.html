@@ -35,11 +35,11 @@
     </div>
   </div>
 
-  <!-- P3 SINGLE-TIMING EDITOR POPUP -->
+  <!-- TURNOUT TIMING EDITOR POPUP -->
   <div class="p3-editor-overlay hidden" id="p3-editor-overlay" onclick="closeTimingPopupBackdrop(event)">
     <div class="p3-editor-panel" id="p3-editor-panel">
       <div class="p3-editor-header">
-        <span id="timing-popup-title" class="p3-editor-title">P3 Timing</span>
+        <span id="timing-popup-title" class="p3-editor-title">Timing</span>
         <button class="p3-editor-close" onclick="cancelTimingEditor()">✕</button>
       </div>
       <div class="p3-editor-body">
@@ -123,6 +123,48 @@
             placeholder="A411, A412, A421"></textarea>
           <button class="secondary-btn" onclick="importAppliancesFromUI()">Import</button>
         </details>
+
+        <!-- RDR Report section -->
+        <div class="settings-section-divider">RDR Report — Office Hours Names</div>
+
+        <div class="settings-section-head">
+          <span class="field-label" style="margin:0">OPS Names</span>
+        </div>
+        <div id="rdr-settings-list-ops" class="rota-entries-list"></div>
+        <div class="settings-add-form">
+          <input type="text" class="text-input settings-sm" id="rdr-rank-ops" placeholder="Rank"
+                 onkeydown="if(event.key==='Enter')el('rdr-name-ops').focus()">
+          <input type="text" class="text-input settings-sm" id="rdr-name-ops" placeholder="Name"
+                 onkeydown="if(event.key==='Enter')rdrAddEntry('ops')">
+          <button class="secondary-btn-sm" id="rdr-add-btn-ops" onclick="rdrAddEntry('ops')">+ Add</button>
+        </div>
+        <details class="settings-import-block">
+          <summary>Quick import…</summary>
+          <p class="settings-import-hint">One per line — <code>LCP IRFAN</code> or <code>CPL RAZIN</code></p>
+          <textarea class="settings-import-box" id="rdr-import-ops" rows="6"
+            placeholder="LCP IRFAN&#10;CPL RAZIN&#10;CPL RIZQ"></textarea>
+          <button class="secondary-btn" onclick="rdrImportEntries('ops')">Import</button>
+        </details>
+
+        <div class="settings-section-head" style="margin-top:16px">
+          <span class="field-label" style="margin:0">EMS Names</span>
+        </div>
+        <div id="rdr-settings-list-ems" class="rota-entries-list"></div>
+        <div class="settings-add-form">
+          <input type="text" class="text-input settings-sm" id="rdr-rank-ems" placeholder="Rank"
+                 onkeydown="if(event.key==='Enter')el('rdr-name-ems').focus()">
+          <input type="text" class="text-input settings-sm" id="rdr-name-ems" placeholder="Name"
+                 onkeydown="if(event.key==='Enter')rdrAddEntry('ems')">
+          <button class="secondary-btn-sm" id="rdr-add-btn-ems" onclick="rdrAddEntry('ems')">+ Add</button>
+        </div>
+        <details class="settings-import-block">
+          <summary>Quick import…</summary>
+          <p class="settings-import-hint">One per line — <code>CPL KHAIRI</code> or <code>PTE DARWISY</code></p>
+          <textarea class="settings-import-box" id="rdr-import-ems" rows="5"
+            placeholder="CPL KHAIRI&#10;PTE DARWISY&#10;PTE CYRUS"></textarea>
+          <button class="secondary-btn" onclick="rdrImportEntries('ems')">Import</button>
+        </details>
+
       </div>
     </div>
   </div>
@@ -231,6 +273,46 @@
           </div>
         </div>
 
+        <!-- ─── RDR REPORT HELP ─── -->
+        <div style="margin:20px -4px 10px;padding:6px 4px 4px;border-top:1px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text-3)">RDR Report</div>
+
+        <div class="help-section">
+          <h3 class="help-heading">6. Setting Up RDR Name Lists</h3>
+          <p>OPS and EMS OH name lists are configured in Settings. AM/PM Rota names are pulled automatically from the IC Entries you already configured above.</p>
+          <div class="help-step">
+            <span class="help-step-num">1</span>
+            <div>Open <strong>Settings</strong>, scroll to <strong>RDR Report — OPS Names</strong> and add all OPS Readiness names, or use <strong>Quick import…</strong>.</div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">2</span>
+            <div>Repeat for <strong>EMS Names</strong>.</div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">3</span>
+            <div>The <strong>AM Rota</strong> and <strong>PM Rota</strong> columns are automatically derived from the IC Entries based on the report date — no separate configuration needed.</div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h3 class="help-heading">7. Generating an RDR Email</h3>
+          <div class="help-step">
+            <span class="help-step-num">1</span>
+            <div>Switch to the <strong>RDR Report</strong> tab and set the report date, shift type, and day type.</div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">2</span>
+            <div>Paste each rollcall message into the matching box. The date and statuses are auto-detected.</div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">3</span>
+            <div>Review the attendance grid. Adjust any statuses manually if needed.</div>
+          </div>
+          <div class="help-step">
+            <span class="help-step-num">4</span>
+            <div>Click <strong>Copy RDR Code to Clipboard</strong>, then in Outlook press <kbd>Alt</kbd>+<kbd>F8</kbd> and run <strong>GenerateRDREmail</strong>.</div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -238,7 +320,7 @@
   <header>
     <div class="header-inner">
       <div class="header-title-group">
-        <h1>Ops Log</h1>
+        <h1>OPS Panel</h1>
         <button class="header-help-btn" onclick="openHelp()" title="User Guide">? Help</button>
       </div>
       <span id="live-clock" class="live-clock">--:--:--</span>
@@ -250,6 +332,14 @@
   </header>
   <div id="shift-badge" class="shift-badge" style="display:none">—</div>
 
+  <!-- MAIN TAB NAV -->
+  <div class="main-tabs">
+    <button class="main-tab-btn active" id="tab-btn-opslog" onclick="switchMainTab('opslog')">Ops Log</button>
+    <button class="main-tab-btn"        id="tab-btn-rdr"    onclick="switchMainTab('rdr')">RDR Report</button>
+  </div>
+
+  <!-- ═══ OPS LOG VIEW ═══ -->
+  <div id="view-opslog" class="main-view">
   <main class="main-grid">
 
     <!-- COL 1: Shift + IC Selection -->
@@ -330,38 +420,19 @@
       </section>
     </div>
 
-    <!-- COL 3: P3 + Generate -->
+    <!-- COL 3: Turnouts + Generate -->
     <div class="col-p3">
 
       <section class="card" id="section-p3">
         <div class="section-head">
-          <h2>P3 Turnout</h2>
+          <h2>Turnouts</h2>
           <span class="err-badge hidden" id="err-p3">!</span>
         </div>
-        <div class="toggle-row">
-          <button class="toggle-btn active" id="btn-nop3" onclick="setP3(false)">No P3</button>
-          <button class="toggle-btn p3-yes" id="btn-yesp3" onclick="setP3(true)">P3 Turnout</button>
-        </div>
-
-        <div id="p3-summary-panel" class="hidden">
-          <!-- Activator stays inline on the card -->
-          <div class="p3-activator-group">
-            <label class="field-label">Activated by</label>
-            <div class="p3-activator-presets" id="p3-activator-presets">
-              <button class="activator-btn" id="abtn-opsctr"  onclick="selectP3Preset('OPS CTR')">OPS CTR</button>
-              <button class="activator-btn" id="abtn-headops" onclick="selectP3Preset('HEAD OPS')">HEAD OPS</button>
-              <button class="activator-btn" id="abtn-others"  onclick="selectP3Preset('others')">Others…</button>
-            </div>
-            <div id="p3-others-wrap" class="hidden">
-              <input type="text" class="text-input" id="p3-others-input"
-                     placeholder="Enter name or rank+name…"
-                     oninput="onP3OthersInput()">
-            </div>
-            <div class="p3-activator-current hidden" id="p3-activator-current"></div>
-          </div>
-          <!-- Clickable timing summary — each cell opens a per-timing popup -->
-          <div id="p3-summary-content"></div>
-        </div>
+        <div id="turnout-list"></div>
+        <button class="add-turnout-btn" id="add-turnout-btn" onclick="addTurnout()">
+          <span class="add-turnout-plus">+</span>
+          Add Turnout
+        </button>
       </section>
 
       <section class="card" id="section-generate">
@@ -373,6 +444,97 @@
     </div>
 
   </main>
+  </div><!-- end #view-opslog -->
+
+  <!-- ═══ RDR REPORT VIEW ═══ -->
+  <div id="view-rdr" class="main-view hidden">
+    <div class="rdr-main-grid">
+
+      <!-- LEFT: Report Details + Rollcall -->
+      <div class="rdr-col-controls">
+
+        <section class="card" id="rdr-section-details">
+          <div class="section-head"><h2>Report Details</h2></div>
+          <div class="field-group">
+            <label class="field-label" for="rdr-date">Date</label>
+            <input type="date" class="text-input" id="rdr-date" oninput="rdrOnDateChange()">
+          </div>
+          <div class="field-group" style="margin-top:14px">
+            <label class="field-label">Shift Type</label>
+            <div class="toggle-row" id="rdr-shift-btns">
+              <button class="toggle-btn active" data-shift="AM">AM</button>
+              <button class="toggle-btn"        data-shift="PM">PM</button>
+              <button class="toggle-btn"        data-shift="FULL">Full</button>
+            </div>
+          </div>
+          <div class="field-group" style="margin-top:14px">
+            <label class="field-label">Day Type</label>
+            <div class="toggle-row" id="rdr-day-btns">
+              <button class="toggle-btn active" data-day="WEEKDAY">Weekday</button>
+              <button class="toggle-btn"        data-day="WEEKEND">Weekend / PH</button>
+            </div>
+          </div>
+          <div class="subject-preview" id="rdr-subject-preview">Subject: …</div>
+          <div class="rdr-rota-info hidden" id="rdr-rota-info">
+            <span>AM Shift:</span><span id="rdr-am-rota-chip"></span>
+            <span style="margin-left:8px">PM Shift:</span><span id="rdr-pm-rota-chip"></span>
+          </div>
+        </section>
+
+        <section class="card" id="rdr-section-rollcall">
+          <div class="section-head"><h2>Rollcall Messages</h2></div>
+          <p class="hint">Paste each rollcall into the matching box. Statuses are auto-detected.</p>
+
+          <div class="rollcall-paste-group">
+            <div class="rollcall-paste-label">
+              Office Hours (OPS &amp; EMS)
+            </div>
+            <textarea id="rollcall-paste-oh" rows="7"
+                      placeholder="Paste OH rollcall here…"
+                      oninput="rdrOnRollcallInput('oh')"></textarea>
+            <div id="rollcall-results-oh" class="rollcall-results hidden"></div>
+          </div>
+
+          <div class="rollcall-paste-group">
+            <div class="rollcall-paste-label" id="rdr-label-am">AM Rota</div>
+            <textarea id="rollcall-paste-am" rows="5"
+                      placeholder="Paste AM Rota rollcall here…"
+                      oninput="rdrOnRollcallInput('am')"></textarea>
+            <div id="rollcall-results-am" class="rollcall-results hidden"></div>
+          </div>
+
+          <div class="rollcall-paste-group">
+            <div class="rollcall-paste-label" id="rdr-label-pm">PM Rota</div>
+            <textarea id="rollcall-paste-pm" rows="5"
+                      placeholder="Paste PM Rota rollcall here…"
+                      oninput="rdrOnRollcallInput('pm')"></textarea>
+            <div id="rollcall-results-pm" class="rollcall-results hidden"></div>
+          </div>
+        </section>
+
+      </div><!-- end rdr-col-controls -->
+
+      <!-- RIGHT: Attendance Grid -->
+      <div class="rdr-col-att">
+        <section class="card" id="rdr-section-attendance">
+          <div class="section-head"><h2>OPS Branch NSF Attendance</h2></div>
+          <div class="att-grid" id="rdr-att-grid"><!-- built by JS --></div>
+        </section>
+      </div>
+
+    </div><!-- end rdr-main-grid -->
+
+    <!-- Hidden STN fields (VBA format compat) -->
+    <textarea id="stn41" style="display:none"></textarea>
+    <textarea id="stn42" style="display:none"></textarea>
+    <textarea id="stn43" style="display:none"></textarea>
+    <textarea id="stn44" style="display:none"></textarea>
+    <textarea id="stn45" style="display:none"></textarea>
+
+    <section class="card" style="margin:14px 16px 40px;">
+      <button class="generate-btn" id="rdr-generate-btn" onclick="rdrGenerate()">Copy RDR Code to Clipboard</button>
+    </section>
+  </div><!-- end #view-rdr -->
 
   <script src="app.js"></script>
 </body>

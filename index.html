@@ -86,25 +86,34 @@
       </div>
       <div class="settings-modal-body">
         <div class="settings-section-head">
-          <span class="field-label" style="margin:0">IC Entries</span>
+          <span class="field-label" style="margin:0">Rota Personnel</span>
         </div>
         <div id="rota-entries-list" class="rota-entries-list"></div>
-        <div class="settings-add-form">
-          <input type="text" class="text-input settings-sm" id="new-entry-rank" placeholder="Rank"
-                 onkeydown="if(event.key==='Enter')el('new-entry-name').focus()">
-          <input type="text" class="text-input settings-sm" id="new-entry-name" placeholder="Name"
-                 onkeydown="if(event.key==='Enter')addRotaEntryFromUI()">
-          <button class="secondary-btn-sm" onclick="addRotaEntryFromUI()">+ Add</button>
-        </div>
         <details class="settings-import-block">
           <summary>Quick import…</summary>
-          <p class="settings-import-hint">One entry per line (or comma-separated):<br>
-            <code>Rota 1|SGT|Ahmad, Rota 1|CPL|Raza</code>
+          <p class="settings-import-hint">One entry per line — <code>Rota 1,SGT,NAME</code><br>
+            <em>⚠ Overwrites existing names for each rota present.</em>
           </p>
           <textarea class="settings-import-box" id="rota-import-text" rows="5"
-            placeholder="Rota 1|SGT|Name&#10;Rota 2|CPL|Name"></textarea>
+            placeholder="Rota 1,SGT,NAME&#10;Rota 2,CPL,NAME"></textarea>
           <button class="secondary-btn" onclick="importRotaEntriesFromUI()">Import</button>
         </details>
+
+        <!-- OH Personnel section -->
+        <div class="settings-section-head" style="margin-top:18px">
+          <span class="field-label" style="margin:0">OH Personnel</span>
+        </div>
+        <div id="oh-entries-list"></div>
+        <details class="settings-import-block">
+          <summary>Quick import…</summary>
+          <p class="settings-import-hint">One entry per line — <code>OPS,SGT,NAME</code> or <code>EMS,CPL,NAME</code><br>
+            <em>⚠ Overwrites existing names for each type present.</em>
+          </p>
+          <textarea class="settings-import-box" id="rdr-import-combined" rows="8"
+            placeholder="OPS,LCP,IRFAN&#10;OPS,CPL,RAZIN&#10;EMS,CPL,KHAIRI&#10;EMS,PTE,DARWISY"></textarea>
+          <button class="secondary-btn" onclick="rdrImportEntriesCombined()">Import</button>
+        </details>
+
         <div class="settings-section-head" style="margin-top:18px">
           <span class="field-label" style="margin:0">Appliances</span>
         </div>
@@ -124,46 +133,39 @@
           <button class="secondary-btn" onclick="importAppliancesFromUI()">Import</button>
         </details>
 
-        <!-- RDR Report section -->
-        <div class="settings-section-divider">RDR Report — Office Hours Names</div>
-
-        <div class="settings-section-head">
-          <span class="field-label" style="margin:0">OPS Names</span>
+        <!-- Email Recipients section -->
+        <div class="settings-section-head" style="margin-top:18px">
+          <span class="field-label" style="margin:0">Email Recipients</span>
+          <span class="settings-hint" style="font-size:10px;color:var(--text-3);font-weight:400;margin-left:8px">Used for circulation list autocomplete in RDR Report</span>
         </div>
-        <div id="rdr-settings-list-ops" class="rota-entries-list"></div>
-        <div class="settings-add-form">
-          <input type="text" class="text-input settings-sm" id="rdr-rank-ops" placeholder="Rank"
-                 onkeydown="if(event.key==='Enter')el('rdr-name-ops').focus()">
-          <input type="text" class="text-input settings-sm" id="rdr-name-ops" placeholder="Name"
-                 onkeydown="if(event.key==='Enter')rdrAddEntry('ops')">
-          <button class="secondary-btn-sm" id="rdr-add-btn-ops" onclick="rdrAddEntry('ops')">+ Add</button>
+        <div class="rdr-recipients-wrap">
+          <div id="rdr-recipients-list" class="rdr-recipients-list"></div>
+          <div id="rdr-recipients-add-area"></div>
         </div>
         <details class="settings-import-block">
           <summary>Quick import…</summary>
-          <p class="settings-import-hint">One per line — <code>LCP IRFAN</code> or <code>CPL RAZIN</code></p>
-          <textarea class="settings-import-box" id="rdr-import-ops" rows="6"
-            placeholder="LCP IRFAN&#10;CPL RAZIN&#10;CPL RIZQ"></textarea>
-          <button class="secondary-btn" onclick="rdrImportEntries('ops')">Import</button>
+          <p class="settings-import-hint">One entry per line — <code>RANK,NAME,email@example.com</code><br>
+            Rank is optional: <code>NAME,email@example.com</code> also works.<br>
+            <em>Appends to existing list; duplicates (same email) are skipped.</em>
+          </p>
+          <textarea class="settings-import-box" id="recip-import-text" rows="5"
+            placeholder="MAJ ROGER LIANG,roger@example.com&#10;CPT HADIZUL,hadizul@example.com&#10;LTA TAUFIQ,taufiq@example.com"></textarea>
+          <button class="secondary-btn" onclick="rdrImportRecipients()">Import</button>
         </details>
 
-        <div class="settings-section-head" style="margin-top:16px">
-          <span class="field-label" style="margin:0">EMS Names</span>
+        <!-- Valid Reasons section -->
+        <div class="settings-section-head" style="margin-top:18px">
+          <span class="field-label" style="margin:0">Valid Absence Reasons</span>
+          <span class="settings-hint" style="font-size:10px;color:var(--text-3);font-weight:400;margin-left:8px">Only listed codes are recognised during rollcall parsing</span>
         </div>
-        <div id="rdr-settings-list-ems" class="rota-entries-list"></div>
-        <div class="settings-add-form">
-          <input type="text" class="text-input settings-sm" id="rdr-rank-ems" placeholder="Rank"
-                 onkeydown="if(event.key==='Enter')el('rdr-name-ems').focus()">
-          <input type="text" class="text-input settings-sm" id="rdr-name-ems" placeholder="Name"
-                 onkeydown="if(event.key==='Enter')rdrAddEntry('ems')">
-          <button class="secondary-btn-sm" id="rdr-add-btn-ems" onclick="rdrAddEntry('ems')">+ Add</button>
+        <div id="rdr-reasons-list" class="rdr-reasons-chip-list"></div>
+        <div class="settings-add-form" style="margin-top:6px">
+          <input type="text" class="text-input settings-sm" id="new-reason-input"
+                 placeholder="e.g. VL" maxlength="8" style="width:80px;text-transform:uppercase"
+                 oninput="this.value=this.value.toUpperCase()"
+                 onkeydown="if(event.key==='Enter')rdrAddReason()">
+          <button class="secondary-btn-sm" onclick="rdrAddReason()">+ Add</button>
         </div>
-        <details class="settings-import-block">
-          <summary>Quick import…</summary>
-          <p class="settings-import-hint">One per line — <code>CPL KHAIRI</code> or <code>PTE DARWISY</code></p>
-          <textarea class="settings-import-box" id="rdr-import-ems" rows="5"
-            placeholder="CPL KHAIRI&#10;PTE DARWISY&#10;PTE CYRUS"></textarea>
-          <button class="secondary-btn" onclick="rdrImportEntries('ems')">Import</button>
-        </details>
 
       </div>
     </div>
@@ -184,8 +186,8 @@
           <div class="help-step">
             <span class="help-step-num">1</span>
             <div>
-              <strong>IC Entries (Rota Names)</strong><br>
-              Open <strong>Settings → IC Entries → Quick import…</strong><br>
+              <strong>Rota Personnel (Rota Names)</strong><br>
+              Open <strong>Settings → Rota Personnel → Quick import…</strong><br>
               Copy the contents of <code>Ops Log Rota Names List.txt</code> and paste it into the import box, then click <strong>Import</strong>.
             </div>
           </div>
@@ -253,7 +255,7 @@
         <div class="help-section">
           <h3 class="help-heading">4. Settings Options</h3>
           <ul class="help-list">
-            <li><strong>Add a name</strong> — type a rank and name in the fields at the bottom of IC Entries and click <strong>+ Add</strong>. Use the rota tabs (Rota 1 / 2 / 3) to target the correct rota.</li>
+            <li><strong>Add a name</strong> — click the dotted <em>Click to add personnel</em> button inside the relevant tab (Rota 1 / 2 / 3 for Rota Personnel, OPS OH / EMS OH for OH Personnel).</li>
             <li><strong>Edit a name</strong> — click the ✎ pencil icon on any entry, update the fields, and click <strong>Save</strong>.</li>
             <li><strong>Remove a name</strong> — click the ✕ button on the entry.</li>
             <li><strong>Reorder names</strong> — drag the ⠿ handle on any entry to move it up or down. The order here controls the order of the name buttons on the main panel.</li>
@@ -278,14 +280,14 @@
 
         <div class="help-section">
           <h3 class="help-heading">6. Setting Up RDR Name Lists</h3>
-          <p>OPS and EMS OH name lists are configured in Settings. AM/PM Rota names are pulled automatically from the IC Entries you already configured above.</p>
+          <p>OPS and EMS OH name lists are configured in Settings. AM/PM Rota names are pulled automatically from the Rota Personnel you already configured above.</p>
           <div class="help-step">
             <span class="help-step-num">1</span>
-            <div>Open <strong>Settings</strong>, scroll to <strong>RDR Report — OPS Names</strong> and add all OPS Readiness names, or use <strong>Quick import…</strong>.</div>
+            <div>Open <strong>Settings → OH Personnel</strong> and select the <strong>OPS OH</strong> tab. Add names via the dotted button or use <strong>Quick import OPS…</strong>.</div>
           </div>
           <div class="help-step">
             <span class="help-step-num">2</span>
-            <div>Repeat for <strong>EMS Names</strong>.</div>
+            <div>Switch to the <strong>EMS OH</strong> tab and repeat, or use <strong>Quick import EMS…</strong>.</div>
           </div>
           <div class="help-step">
             <span class="help-step-num">3</span>
@@ -455,47 +457,58 @@
 
         <section class="card" id="rdr-section-details">
           <div class="section-head"><h2>Report Details</h2></div>
-          <div class="field-group">
-            <label class="field-label" for="rdr-date">Date</label>
-            <input type="date" class="text-input" id="rdr-date" oninput="rdrOnDateChange()">
+
+          <!-- Shift auto-detect / override (mirrors ops log pattern) -->
+          <div class="toggle-row">
+            <button class="toggle-btn active" id="rdr-btn-auto"     onclick="rdrSetShiftMode('auto')">Auto-detect</button>
+            <button class="toggle-btn"        id="rdr-btn-override" onclick="rdrSetShiftMode('override')">Override</button>
           </div>
-          <div class="field-group" style="margin-top:14px">
-            <label class="field-label">Shift Type</label>
-            <div class="toggle-row" id="rdr-shift-btns">
-              <button class="toggle-btn active" data-shift="AM">AM</button>
-              <button class="toggle-btn"        data-shift="PM">PM</button>
-              <button class="toggle-btn"        data-shift="FULL">Full</button>
+          <div id="rdr-auto-detect-display" class="auto-detect-display"></div>
+          <div id="rdr-override-panel" class="hidden">
+            <div class="override-date-row">
+              <button class="override-date-chip" id="rdr-override-date-chip" onclick="rdrOpenCalendar()">
+                Select date
+              </button>
+              <div class="override-ampm-stack">
+                <button class="ampm-btn active" id="rdr-seg-am" onclick="rdrSetOverrideShift('AM')">🌤️ AM</button>
+                <button class="ampm-btn"        id="rdr-seg-pm" onclick="rdrSetOverrideShift('PM')">🌙 PM</button>
+              </div>
             </div>
           </div>
-          <div class="field-group" style="margin-top:14px">
-            <label class="field-label">Day Type</label>
+
+          <!-- Day type (auto-detected, user can toggle) -->
+          <div class="field-group" style="margin-top:16px">
+            <label class="field-label">Day Type <span id="rdr-day-auto-badge" class="rdr-auto-badge">auto</span></label>
             <div class="toggle-row" id="rdr-day-btns">
-              <button class="toggle-btn active" data-day="WEEKDAY">Weekday</button>
-              <button class="toggle-btn"        data-day="WEEKEND">Weekend / PH</button>
+              <button class="toggle-btn active" data-day="WEEKDAY" onclick="rdrSetDay('WEEKDAY')">Weekday</button>
+              <button class="toggle-btn"        data-day="WEEKEND" onclick="rdrSetDay('WEEKEND')">Weekend / PH</button>
             </div>
           </div>
-          <div class="subject-preview" id="rdr-subject-preview">Subject: …</div>
+
+          <!-- Rota chips -->
           <div class="rdr-rota-info hidden" id="rdr-rota-info">
             <span>AM Shift:</span><span id="rdr-am-rota-chip"></span>
             <span style="margin-left:8px">PM Shift:</span><span id="rdr-pm-rota-chip"></span>
           </div>
+
+          <div class="subject-preview" id="rdr-subject-preview">Subject: …</div>
         </section>
 
-        <section class="card" id="rdr-section-rollcall">
+        <section class="card" id="rdr-section-rollcall" style="margin-top:14px">
           <div class="section-head"><h2>Rollcall Messages</h2></div>
           <p class="hint">Paste each rollcall into the matching box. Statuses are auto-detected.</p>
 
-          <div class="rollcall-paste-group">
-            <div class="rollcall-paste-label">
-              Office Hours (OPS &amp; EMS)
-            </div>
+          <!-- OH Rollcall -->
+          <div class="rollcall-paste-group" id="rollcall-paste-group-oh" style="margin-top:16px">
+            <div class="rollcall-paste-label">Office Hours (OPS &amp; EMS)</div>
             <textarea id="rollcall-paste-oh" rows="7"
                       placeholder="Paste OH rollcall here…"
                       oninput="rdrOnRollcallInput('oh')"></textarea>
             <div id="rollcall-results-oh" class="rollcall-results hidden"></div>
           </div>
 
-          <div class="rollcall-paste-group">
+          <!-- AM Rota Rollcall -->
+          <div class="rollcall-paste-group" style="margin-top:20px">
             <div class="rollcall-paste-label" id="rdr-label-am">AM Rota</div>
             <textarea id="rollcall-paste-am" rows="5"
                       placeholder="Paste AM Rota rollcall here…"
@@ -503,12 +516,16 @@
             <div id="rollcall-results-am" class="rollcall-results hidden"></div>
           </div>
 
-          <div class="rollcall-paste-group">
+          <!-- PM Rota Rollcall (disabled during AM shifts) -->
+          <div class="rollcall-paste-group" id="rdr-pm-group" style="margin-top:20px">
             <div class="rollcall-paste-label" id="rdr-label-pm">PM Rota</div>
             <textarea id="rollcall-paste-pm" rows="5"
                       placeholder="Paste PM Rota rollcall here…"
                       oninput="rdrOnRollcallInput('pm')"></textarea>
             <div id="rollcall-results-pm" class="rollcall-results hidden"></div>
+            <div id="rdr-pm-notice" class="rdr-pm-notice hidden">
+              AM shift — all PM shift personnel assumed ON DUTY.
+            </div>
           </div>
         </section>
 
@@ -516,26 +533,65 @@
 
       <!-- RIGHT: Attendance Grid -->
       <div class="rdr-col-att">
+
+        <!-- Circulation List -->
+        <section class="card" id="rdr-section-circ" style="margin-bottom:10px">
+          <div class="section-head"><h2>Circulation List</h2></div>
+          <div class="circ-row">
+            <label class="circ-label">To</label>
+            <div class="circ-autocomplete-wrap" id="rdr-circ-to-wrap">
+              <div class="circ-tags" id="rdr-circ-to-tags"></div>
+              <input type="text" id="rdr-circ-to-input" class="circ-tag-input"
+                     placeholder="Type name…" autocomplete="off"
+                     oninput="rdrCircInput('to')" onkeydown="rdrCircKeydown(event,'to')"
+                     onfocus="rdrCircInput('to')" onblur="rdrCircBlur('to')">
+              <div class="circ-dropdown hidden" id="rdr-circ-to-dropdown"></div>
+            </div>
+          </div>
+          <div class="circ-row">
+            <label class="circ-label">CC</label>
+            <div class="circ-autocomplete-wrap" id="rdr-circ-cc-wrap">
+              <div class="circ-tags" id="rdr-circ-cc-tags"></div>
+              <input type="text" id="rdr-circ-cc-input" class="circ-tag-input"
+                     placeholder="Type name…" autocomplete="off"
+                     oninput="rdrCircInput('cc')" onkeydown="rdrCircKeydown(event,'cc')"
+                     onfocus="rdrCircInput('cc')" onblur="rdrCircBlur('cc')">
+              <div class="circ-dropdown hidden" id="rdr-circ-cc-dropdown"></div>
+            </div>
+          </div>
+        </section>
+
         <section class="card" id="rdr-section-attendance">
-          <div class="section-head"><h2>OPS Branch NSF Attendance</h2></div>
+          <div class="section-head">
+            <h2>OPS Branch NSF Attendance</h2>
+            <span class="err-badge hidden" id="rdr-att-err-badge">!</span>
+          </div>
           <div class="att-grid" id="rdr-att-grid"><!-- built by JS --></div>
+        </section>
+
+        <section class="card" style="margin-top:10px">
+          <div class="section-head"><h2>Sign-off Banner</h2></div>
+          <div id="rdr-signoff-drop" class="rdr-signoff-drop"
+               ondragover="event.preventDefault();this.classList.add('drag-over')"
+               ondragleave="this.classList.remove('drag-over')"
+               ondrop="rdrSignOffDrop(event)">
+            <div id="rdr-signoff-preview" class="rdr-signoff-preview">
+              <span class="rdr-signoff-hint">Drag &amp; drop sign-off image here</span>
+            </div>
+          </div>
+          <button class="link-btn" id="rdr-signoff-clear" onclick="rdrSignOffClear()" style="display:none;margin-top:6px;font-size:11px">Remove image</button>
         </section>
       </div>
 
     </div><!-- end rdr-main-grid -->
 
-    <!-- Hidden STN fields (VBA format compat) -->
-    <textarea id="stn41" style="display:none"></textarea>
-    <textarea id="stn42" style="display:none"></textarea>
-    <textarea id="stn43" style="display:none"></textarea>
-    <textarea id="stn44" style="display:none"></textarea>
-    <textarea id="stn45" style="display:none"></textarea>
-
     <section class="card" style="margin:14px 16px 40px;">
-      <button class="generate-btn" id="rdr-generate-btn" onclick="rdrGenerate()">Copy RDR Code to Clipboard</button>
+      <button class="generate-btn has-errors" id="rdr-generate-btn" onclick="rdrGenerate()">Generate .msg File</button>
     </section>
   </div><!-- end #view-rdr -->
 
+  <script src="https://cdn.jsdelivr.net/npm/cfb/dist/cfb.min.js"></script>
+  <script src="sig-images.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -23,6 +23,11 @@
   --rota-1-bg: color-mix(in srgb,#ff9500 12%,var(--surface));
   --rota-2-bg: color-mix(in srgb,#007aff 12%,var(--surface));
   --rota-3-bg: color-mix(in srgb,#34c759 12%,var(--surface));
+  /* OH (Office Hours) colours: OPS=indigo  EMS=rose */
+  --oh-ops: #5856d6;
+  --oh-ems: #ff2d55;
+  --oh-ops-bg: color-mix(in srgb,#5856d6 12%,var(--surface));
+  --oh-ems-bg: color-mix(in srgb,#ff2d55 12%,var(--surface));
   /* Station colours (distinct from rota colours) */
   --stn-41: #8e44ad;   /* purple    */
   --stn-42: #148f77;   /* teal      */
@@ -1236,6 +1241,9 @@ h1 {
 .rota-entry-row[data-rota="1"] { background: color-mix(in srgb,var(--rota-1) 32%,var(--surface)); border-color: color-mix(in srgb,var(--rota-1) 40%,transparent); color: var(--text); }
 .rota-entry-row[data-rota="2"] { background: color-mix(in srgb,var(--rota-2) 32%,var(--surface)); border-color: color-mix(in srgb,var(--rota-2) 40%,transparent); color: var(--text); }
 .rota-entry-row[data-rota="3"] { background: color-mix(in srgb,var(--rota-3) 32%,var(--surface)); border-color: color-mix(in srgb,var(--rota-3) 40%,transparent); color: var(--text); }
+/* OH Personnel row tints */
+.rota-entry-row[data-oh="ops"] { background: color-mix(in srgb,var(--oh-ops) 32%,var(--surface)); border-color: color-mix(in srgb,var(--oh-ops) 40%,transparent); color: var(--text); }
+.rota-entry-row[data-oh="ems"] { background: color-mix(in srgb,var(--oh-ems) 32%,var(--surface)); border-color: color-mix(in srgb,var(--oh-ems) 40%,transparent); color: var(--text); }
 .rota-entry-badge {
   font-size: 10px;
   font-weight: 700;
@@ -1254,12 +1262,14 @@ h1 {
 .drag-handle {
   cursor: grab;
   color: var(--text-3);
-  font-size: 16px;
+  font-size: 14px;
   flex-shrink: 0;
   user-select: none;
   padding: 0 2px;
   line-height: 1;
+  letter-spacing: -1px;
 }
+.drag-handle::before { content: '\22EE\22EE'; }
 .drag-handle:active { cursor: grabbing; }
 .rota-entry-row.drag-active { opacity: .4; }
 .rota-entry-row.drag-over { outline: 2px dashed var(--accent); outline-offset: 2px; }
@@ -1388,6 +1398,7 @@ h1 {
   flex-shrink: 0;
   transition: background var(--transition), color var(--transition);
 }
+.entry-remove-btn::before { content: '\00D7'; font-size: 14px; line-height: 1; }
 .entry-remove-btn:hover { background: color-mix(in srgb,var(--danger) 12%,var(--surface)); color: var(--danger); }
 
 /* Quick import collapsible */
@@ -1514,6 +1525,83 @@ h1 {
 .settings-tab-content.stn-content-44 { background: color-mix(in srgb,var(--stn-44) 8%,var(--surface)); border-color: color-mix(in srgb,var(--stn-44) 35%,var(--border)); }
 .settings-tab-content.stn-content-45 { background: color-mix(in srgb,var(--stn-45) 8%,var(--surface)); border-color: color-mix(in srgb,var(--stn-45) 35%,var(--border)); }
 
+/* ---- OH Personnel tab active & hover ---- */
+.settings-tab.oh-tab-ops:not(.active):hover { color: var(--oh-ops); border-color: color-mix(in srgb,var(--oh-ops) 40%,var(--border)); }
+.settings-tab.oh-tab-ems:not(.active):hover { color: var(--oh-ems); border-color: color-mix(in srgb,var(--oh-ems) 40%,var(--border)); }
+.settings-tab.oh-tab-ops.active { background: var(--oh-ops-bg); border-color: color-mix(in srgb,var(--oh-ops) 35%,var(--border)); color: var(--oh-ops); font-weight: 700; z-index: 2; }
+.settings-tab.oh-tab-ems.active { background: var(--oh-ems-bg); border-color: color-mix(in srgb,var(--oh-ems) 35%,var(--border)); color: var(--oh-ems); font-weight: 700; z-index: 2; }
+
+/* OH Personnel tab content panels */
+.settings-tab-content.oh-content-ops { background: var(--oh-ops-bg); border-color: color-mix(in srgb,var(--oh-ops) 35%,var(--border)); }
+.settings-tab-content.oh-content-ems { background: var(--oh-ems-bg); border-color: color-mix(in srgb,var(--oh-ems) 35%,var(--border)); }
+
+/* ---- Add-personnel dotted button (same height as a name-tag row) ---- */
+.add-personnel-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 16px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-top: 6px;
+  box-sizing: border-box;
+}
+.add-personnel-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.add-personnel-btn.oh-tab-ops:hover {
+  border-color: var(--oh-ops);
+  color: var(--oh-ops);
+  background: color-mix(in srgb, var(--oh-ops) 5%, transparent);
+}
+.add-personnel-btn.oh-tab-ems:hover {
+  border-color: var(--oh-ems);
+  color: var(--oh-ems);
+  background: color-mix(in srgb, var(--oh-ems) 5%, transparent);
+}
+
+/* OH quick-import target selector */
+.oh-import-target-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 0;
+}
+.oh-import-target-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.oh-import-toggle {
+  margin-bottom: 0 !important;
+  flex: none;
+  padding: 2px;
+}
+
+/* ---- Inline add / edit form inside tab content ---- */
+.add-personnel-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border: 1.5px dashed var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  margin-top: 6px;
+  align-items: center;
+}
+
 .settings-empty-hint {
   font-size: 13px;
   color: var(--text-3);
@@ -1532,6 +1620,7 @@ h1 {
   flex-shrink: 0;
   transition: background var(--transition), color var(--transition);
 }
+.entry-edit-btn::before { content: '\270E'; font-size: 13px; line-height: 1; }
 .entry-edit-btn:hover { background: color-mix(in srgb,var(--accent) 12%,var(--surface)); color: var(--accent); }
 
 /* Appliance callsign colour follows STN */
@@ -2198,10 +2287,36 @@ h1 {
 .rollcall-paste-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
 }
 .rollcall-paste-group:last-child { margin-bottom: 0; }
+.rollcall-paste-group textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 12px;
+  padding: 10px 12px;
+  resize: vertical;
+  transition: border-color var(--transition);
+  box-sizing: border-box;
+}
+.rollcall-paste-group textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.rollcall-paste-group textarea:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .rollcall-paste-label {
   font-size: 11px;
   font-weight: 700;
@@ -2304,6 +2419,165 @@ h1 {
   font-style: italic;
   padding: 8px 0;
 }
+
+/* =============================================
+   RDR — NEW STATUS / SHIFT CONTROLS
+   ============================================= */
+.rdr-auto-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  color: var(--accent);
+  border-radius: 6px;
+  padding: 1px 5px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.rdr-auto-badge.hidden { display: none; }
+
+/* PM group disabled during AM shift */
+.rdr-pm-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+/* OH paste box disabled on weekends */
+.oh-weekend-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+  position: relative;
+}
+.oh-weekend-disabled::after {
+  content: 'Weekend / PH \2014  OH not applicable';
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: var(--text-2);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  border-radius: var(--radius); pointer-events: none;
+}
+/* Circulation list */
+.circ-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.circ-row:last-child { margin-bottom: 0; }
+.circ-label { font-size: 12px; font-weight: 600; color: var(--text-2); width: 24px; flex-shrink: 0; padding-top: 6px; }
+.circ-autocomplete-wrap { flex: 1; position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 34px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); cursor: text; }
+.circ-autocomplete-wrap:focus-within { border-color: var(--accent); }
+.circ-tag { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: color-mix(in srgb, var(--accent) 15%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 99px; font-size: 11px; font-weight: 600; color: var(--accent); }
+.circ-tag-del { border: none; background: none; cursor: pointer; color: var(--text-3); font-size: 13px; line-height: 1; padding: 0 1px; }
+.circ-tag-del:hover { color: var(--danger); }
+.circ-tag-input { border: none; background: none; outline: none; font-size: 12px; color: var(--text); flex: 1; min-width: 80px; padding: 2px 0; }
+.circ-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); z-index: 200; overflow: hidden; }
+.circ-dropdown-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: 12px; }
+.circ-dropdown-item:hover { background: var(--surface-2); }
+.circ-di-name { font-weight: 600; color: var(--text); }
+.circ-di-email { color: var(--text-3); font-size: 11px; margin-left: auto; }
+/* Email recipients wrapper — styled like settings-tab-content with accent tint */
+.rdr-recipients-wrap {
+  border: 1.5px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 12px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  margin-top: 6px;
+}
+.rdr-recipients-list { display: flex; flex-direction: column; gap: 6px; }
+.recip-row { background: color-mix(in srgb, var(--accent) 32%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--text); }
+.recip-badge { background: var(--accent); color: #fff; }
+.recip-email { color: var(--text-3); font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; padding-left: 8px; }
+/* Sign-off drop zone */
+.rdr-signoff-drop {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color .15s, background .15s;
+  overflow: hidden;
+}
+.rdr-signoff-drop.drag-over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+.rdr-signoff-preview { width: 100%; display: flex; align-items: center; justify-content: center; }
+.rdr-signoff-preview img { width: 100%; display: block; border-radius: var(--radius-sm); }
+.rdr-signoff-hint { color: var(--text-3); font-size: 12px; padding: 20px; }
+
+/* Reason chips */
+.rdr-reasons-chip-list {
+  display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; align-items: center;
+}
+.reason-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 6px 2px 8px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 99px; font-size: 11px; font-weight: 700;
+  color: var(--accent); letter-spacing: .04em;
+}
+.reason-chip-del {
+  border: none; background: none; cursor: pointer;
+  color: var(--text-3); font-size: 13px; line-height: 1;
+  padding: 0 1px; border-radius: 50%;
+}
+.reason-chip-del:hover { color: var(--danger); }
+.rdr-pm-notice {
+  font-size: 11px;
+  color: var(--text-2);
+  font-style: italic;
+  padding: 4px 0 0;
+}
+
+/* Compound status cell in attendance grid */
+.att-status-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+.att-status-input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 5px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: inherit;
+  width: 100%;
+}
+.att-status-input.status-ok   { color: var(--success); border-color: var(--success); }
+.att-status-input.status-out  { color: var(--warn);    border-color: var(--warn); }
+.att-status-input.status-warn { color: var(--warn);    border-color: var(--warn);
+                                 background: color-mix(in srgb, var(--warn) 8%, var(--surface));
+                                 border-style: dashed; }
+.att-status-input.status-err  { background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+                                 border-color: var(--danger); }
+.att-status-input:read-only   { background: var(--surface-2); color: var(--success); border-color: color-mix(in srgb, var(--success) 30%, var(--border)); cursor: default; }
+
+.att-row-err {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.att-row-err.hidden { display: none; }
+.att-unlock-btn {
+  flex-shrink: 0; padding: 1px 5px; font-size: 11px; cursor: pointer;
+  background: transparent; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-2); line-height: 1.4;
+}
+.att-unlock-btn:hover { background: var(--surface-2); color: var(--accent); border-color: var(--accent); }
 
 /* =============================================
    ADD TURNOUT BUTTON

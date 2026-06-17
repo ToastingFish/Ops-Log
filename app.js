@@ -2743,8 +2743,9 @@ function rdrBuildMsgBuffer(subject, htmlBodyStr, toAddrs, ccAddrs) {
   const displayTo    = (toAddrs||[]).filter(Boolean).join('; ');
   const displayCc    = (ccAddrs||[]).filter(Boolean).join('; ');
 
+  const msgFlags = 0x0008 | (attachCount > 0 ? 0x0010 : 0); // MSGFLAG_UNSENT | MSGFLAG_HASATTACH
   const fixedProps = [
-    [0x0E07, 0x0003, 0x0008],  // PR_MESSAGE_FLAGS = MSGFLAG_UNSENT
+    [0x0E07, 0x0003, msgFlags], // PR_MESSAGE_FLAGS
     [0x0017, 0x0003, 1],        // PR_IMPORTANCE = normal
     [0x0023, 0x0003, 0],        // PR_SENSITIVITY = normal
     [0x0036, 0x0003, 1],        // PR_SENSITIVITY (alt)
@@ -2827,6 +2828,7 @@ function rdrBuildMsgBuffer(subject, htmlBodyStr, toAddrs, ccAddrs) {
     const extB  = u16(att.ext);
     const fnB   = u16(`image${i}${att.ext}`);
     const aFixed = [
+      [0x0E21, 0x0003, i],           // PR_ATTACH_NUM = attachment index
       [0x3705, 0x0003, 1],           // PR_ATTACH_METHOD = ATTACH_BY_VALUE
       [0x370B, 0x0003, 0xFFFFFFFF],  // PR_RENDERING_POSITION = -1 (inline)
       [0x3714, 0x0003, 4],           // PR_ATTACH_FLAGS = ATT_MHTML_REF

@@ -110,7 +110,7 @@
             <em>⚠ Overwrites existing names for each type present.</em>
           </p>
           <textarea class="settings-import-box" id="rdr-import-combined" rows="8"
-            placeholder="OPS,LCP,IRFAN&#10;OPS,CPL,RAZIN&#10;EMS,CPL,KHAIRI&#10;EMS,PTE,DARWISY"></textarea>
+            placeholder="OPS,SGT,NAME&#10;OPS,CPL,NAME&#10;EMS,CPL,NAME&#10;EMS,PTE,NAME"></textarea>
           <button class="secondary-btn" onclick="rdrImportEntriesCombined()">Import</button>
         </details>
 
@@ -149,7 +149,7 @@
             <em>Appends to existing list; duplicates (same email) are skipped.</em>
           </p>
           <textarea class="settings-import-box" id="recip-import-text" rows="5"
-            placeholder="MAJ ROGER LIANG,roger@example.com&#10;CPT HADIZUL,hadizul@example.com&#10;LTA TAUFIQ,taufiq@example.com"></textarea>
+            placeholder="MAJ NAME,name@example.com&#10;CPT NAME,name@example.com&#10;LTA NAME,name@example.com"></textarea>
           <button class="secondary-btn" onclick="rdrImportRecipients()">Import</button>
         </details>
 
@@ -566,17 +566,26 @@
             <h2>OPS Branch NSF Attendance</h2>
             <span class="err-badge hidden" id="rdr-att-err-badge">!</span>
           </div>
-          <div class="att-grid" id="rdr-att-grid"><!-- built by JS --></div>
+          <div class="att-grids-wrap">
+            <div class="att-col">
+              <div class="att-grid" id="rdr-att-ops"></div>
+              <div class="att-grid" id="rdr-att-ems"></div>
+            </div>
+            <div class="att-col">
+              <div class="att-grid" id="rdr-att-am"></div>
+              <div class="att-grid" id="rdr-att-pm"></div>
+            </div>
+          </div>
         </section>
 
         <section class="card" style="margin-top:10px">
           <div class="section-head"><h2>Sign-off Banner</h2></div>
-          <div id="rdr-signoff-drop" class="rdr-signoff-drop"
-               ondragover="event.preventDefault();this.classList.add('drag-over')"
-               ondragleave="this.classList.remove('drag-over')"
-               ondrop="rdrSignOffDrop(event)">
+          <div id="rdr-signoff-drop" class="rdr-signoff-drop rdr-signoff-paste-box"
+               tabindex="0"
+               onclick="this.focus()"
+               onpaste="rdrSignOffPaste(event)">
             <div id="rdr-signoff-preview" class="rdr-signoff-preview">
-              <span class="rdr-signoff-hint">Drag &amp; drop sign-off image here</span>
+              <span class="rdr-signoff-hint">Click here, then paste image (Ctrl+V)</span>
             </div>
           </div>
           <button class="link-btn" id="rdr-signoff-clear" onclick="rdrSignOffClear()" style="display:none;margin-top:6px;font-size:11px">Remove image</button>
@@ -586,7 +595,14 @@
     </div><!-- end rdr-main-grid -->
 
     <section class="card" style="margin:14px 16px 40px;">
-      <button class="generate-btn has-errors" id="rdr-generate-btn" onclick="rdrGenerate()">Generate .msg File</button>
+      <div class="rdr-gen-row">
+        <button class="generate-btn has-errors" id="rdr-generate-btn" onclick="rdrGenerate()">Generate .msg File</button>
+        <button class="secondary-generate-btn has-errors" id="rdr-copy-html-btn" onclick="rdrCopyHtml()">Copy Table to Clipboard</button>
+      </div>
+      <p class="rdr-gen-hint">
+        <strong>.msg</strong> — full email with all images embedded; open in Outlook (To/CC/Subject pre-filled).<br>
+        <strong>Copy Table</strong> — copies the attendance table only (no sign-off); paste into a new Outlook email manually.
+      </p>
     </section>
   </div><!-- end #view-rdr -->
 

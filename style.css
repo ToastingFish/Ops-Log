@@ -1059,6 +1059,42 @@ h1 {
   cursor: default;
 }
 
+.rdr-gen-row {
+  display: flex;
+  gap: 10px;
+}
+.rdr-gen-row .generate-btn {
+  flex: 2;
+}
+.secondary-generate-btn {
+  flex: 1;
+  padding: 16px 12px;
+  background: var(--surface-2, var(--surface));
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition), transform var(--transition), background var(--transition);
+  white-space: nowrap;
+}
+.secondary-generate-btn:hover:not(.has-errors) {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+.secondary-generate-btn:active:not(.has-errors) { transform: scale(.98); opacity: .9; }
+.secondary-generate-btn.has-errors {
+  border-color: var(--border);
+  color: var(--text-3);
+  cursor: default;
+}
+.rdr-gen-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.6;
+}
+
 .generate-msg {
   margin-top: 12px;
   padding: 12px 16px;
@@ -2200,12 +2236,23 @@ h1 {
 /* =============================================
    RDR — ATTENDANCE GRID
    ============================================= */
+.att-grids-wrap {
+  display: flex;
+  gap: 10px;
+}
+.att-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .att-grid {
   display: grid;
-  grid-template-columns: 1fr 130px 1fr 130px;
+  grid-template-columns: 1fr 130px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
+  align-content: start;
 }
 .att-col-hdr {
   padding: 7px 10px;
@@ -2219,6 +2266,13 @@ h1 {
   text-align: center;
 }
 .att-col-hdr.span-2 { grid-column: span 2; }
+.att-group-sep {
+  grid-column: span 2;
+  height: 10px;
+  background: var(--surface-2);
+  border-top: 2px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
 .att-section-hdr {
   grid-column: span 2;
   padding: 6px 10px;
@@ -2273,7 +2327,7 @@ h1 {
   -webkit-appearance: none;
 }
 .att-empty-row {
-  grid-column: span 4;
+  grid-column: span 2;
   padding: 14px 12px;
   color: var(--text-2);
   font-size: 13px;
@@ -2484,7 +2538,7 @@ h1 {
 .recip-row { background: color-mix(in srgb, var(--accent) 32%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--text); }
 .recip-badge { background: var(--accent); color: #fff; }
 .recip-email { color: var(--text-3); font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; padding-left: 8px; }
-/* Sign-off drop zone */
+/* Sign-off paste box */
 .rdr-signoff-drop {
   border: 2px dashed var(--border);
   border-radius: var(--radius-sm);
@@ -2494,14 +2548,16 @@ h1 {
   justify-content: center;
   transition: border-color .15s, background .15s;
   overflow: hidden;
+  cursor: pointer;
+  outline: none;
 }
-.rdr-signoff-drop.drag-over {
+.rdr-signoff-paste-box:focus {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
 }
 .rdr-signoff-preview { width: 100%; display: flex; align-items: center; justify-content: center; }
 .rdr-signoff-preview img { width: 100%; display: block; border-radius: var(--radius-sm); }
-.rdr-signoff-hint { color: var(--text-3); font-size: 12px; padding: 20px; }
+.rdr-signoff-hint { color: var(--text-3); font-size: 12px; padding: 20px; text-align: center; }
 
 /* Reason chips */
 .rdr-reasons-chip-list {

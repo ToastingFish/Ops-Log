@@ -1981,7 +1981,8 @@ function rdrIsBlocker(key, idx, personType) {
 function rdrIsError(key, idx) { return rdrIsEmpty(key, idx); }
 
 function rdrUpdateGenerateBtn() {
-  const btn = el('rdr-generate-btn'); if (!btn) return;
+  const btn     = el('rdr-generate-btn');     if (!btn) return;
+  const copyBtn = el('rdr-copy-html-btn');
   const errBadge = el('rdr-att-err-badge');
   const { amPeople, pmPeople } = getRdrRotaInfo();
   const isAM = rdrDetectedShift === 'AM';
@@ -1995,6 +1996,7 @@ function rdrUpdateGenerateBtn() {
   }
 
   btn.classList.toggle('has-errors', hasBlocker);
+  if (copyBtn) copyBtn.classList.toggle('has-errors', hasBlocker);
   if (errBadge) errBadge.classList.toggle('hidden', !hasBlocker);
 }
 
@@ -2078,13 +2080,20 @@ function rdrStyleStatusInput(input, personType) {
 }
 
 function rdrBuildAttGrid() {
-  const grid = el('rdr-att-grid'); if (!grid) return;
-  grid.innerHTML = '';
+  const opsGrid = el('rdr-att-ops');
+  const emsGrid = el('rdr-att-ems');
+  const amGrid  = el('rdr-att-am');
+  const pmGrid  = el('rdr-att-pm');
+  if (!opsGrid || !emsGrid || !amGrid || !pmGrid) return;
+  opsGrid.innerHTML = '';
+  emsGrid.innerHTML = '';
+  amGrid.innerHTML  = '';
+  pmGrid.innerHTML  = '';
+
   const { amRota, pmRota, amPeople, pmPeople } = getRdrRotaInfo();
   const isAM      = rdrDetectedShift === 'AM';
   const isWeekend = rdrSelectedDay === 'WEEKEND';
 
-  // On weekends, pre-populate all OH entries as OUT (if not already set)
   if (isWeekend) {
     rdrLists.ops.forEach((_,i) => { if (!rdrAttendance[`ops_${i}`]?.stype) rdrAttendance[`ops_${i}`]={stype:'OUT',reason:'',mcdate:''}; });
     rdrLists.ems.forEach((_,i) => { if (!rdrAttendance[`ems_${i}`]?.stype) rdrAttendance[`ems_${i}`]={stype:'OUT',reason:'',mcdate:''}; });
@@ -2094,63 +2103,66 @@ function rdrBuildAttGrid() {
     ? `<span class="rota-mini-chip rc-${rotaNum(rota)}" style="background:var(--rota-${rotaNum(rota)}-bg);color:var(--rota-${rotaNum(rota)})">${rota}</span>`
     : '';
 
-  const ohWeekendNote = isWeekend
-    ? ` <span style="color:var(--warn);font-size:10px;font-weight:600">(WEEKEND  ALL OUT by default)</span>`
+  const weekendNote = isWeekend
+    ? ` <span style="color:var(--warn);font-size:10px;font-weight:600">(ALL OUT)</span>`
     : '';
 
-  // Column headers
-  rdrAddCell(grid,'att-col-hdr span-2', `OFFICE HOURS${ohWeekendNote}`);
-  rdrAddCell(grid,'att-col-hdr span-2','RDR ROTA SHIFTS');
-
-  //  Upper half: OPS + AM rota 
-  const opsHdr = rdrAddCell(grid,'att-section-hdr','');
-  opsHdr.innerHTML = `OPS READINESS &amp; PLANNING TEAM`;
-  const amHdr = rdrAddCell(grid,'att-section-hdr','');
-  amHdr.innerHTML = `AM SHIFT ${mkRotaChip(amRota)}`;
-
-  const upperLen = Math.max(rdrLists.ops.length, amPeople.length);
-  if (!upperLen) {
-    rdrAddCell(grid,'att-empty-row','No names in settings  add OPS and Rota names in Settings.');
+  // --- OPS box ---
+  rdrAddCell(opsGrid, 'att-col-hdr span-2', `OPS READINESS &amp; PLANNING TEAM${weekendNote}`);
+  if (!rdrLists.ops.length) {
+    rdrAddCell(opsGrid, 'att-empty-row span-2', 'Add OPS names in Settings.');
   } else {
-    for (let i = 0; i < upperLen; i++) {
-      const lP = rdrLists.ops[i], rP = amPeople[i];
-      const lName = document.createElement('div');
-      lName.className = 'att-name-cell' + (lP ? '' : ' empty');
-      lName.textContent = lP ? `${lP.rank} ${lP.name}` : '';
-      grid.appendChild(lName);
-      // On weekends, OH status cells are read-only OUT unless individually overridden
-      grid.appendChild(lP ? rdrMakeStatusCell('ops',i,'oh', isWeekend ? 'weekend-default' : false) : rdrMakeStatusCell('ops',i,'oh','empty'));
-      const rName = document.createElement('div');
-      rName.className = 'att-name-cell' + (rP ? '' : ' empty');
-      rName.textContent = rP ? `${rP.rank} ${rP.name}` : '';
-      grid.appendChild(rName);
-      grid.appendChild(rP ? rdrMakeStatusCell('am',i,'rota',false) : rdrMakeStatusCell('am',i,'rota','empty'));
-    }
+    rdrLists.ops.forEach((p, i) => {
+      const nameEl = document.createElement('div');
+      nameEl.className = 'att-name-cell';
+      nameEl.textContent = `${p.rank} ${p.name}`;
+      opsGrid.appendChild(nameEl);
+      opsGrid.appendChild(rdrMakeStatusCell('ops', i, 'oh', isWeekend ? 'weekend-default' : false));
+    });
   }
 
-  //  Lower half: EMS + PM rota 
-  const emsHdr = rdrAddCell(grid,'att-section-hdr','');
-  emsHdr.innerHTML = `EMS TEAM`;
-  const pmHdr = rdrAddCell(grid,'att-section-hdr','');
-  pmHdr.innerHTML = `PM SHIFT ${mkRotaChip(pmRota)}`;
-
-  const lowerLen = Math.max(rdrLists.ems.length, pmPeople.length);
-  if (!lowerLen) {
-    rdrAddCell(grid,'att-empty-row','No names in settings  add EMS and Rota names in Settings.');
+  // --- EMS box ---
+  rdrAddCell(emsGrid, 'att-col-hdr span-2', `EMS TEAM${weekendNote}`);
+  if (!rdrLists.ems.length) {
+    rdrAddCell(emsGrid, 'att-empty-row span-2', 'Add EMS names in Settings.');
   } else {
-    for (let i = 0; i < lowerLen; i++) {
-      const lP = rdrLists.ems[i], rP = pmPeople[i];
-      const lName = document.createElement('div');
-      lName.className = 'att-name-cell' + (lP ? '' : ' empty');
-      lName.textContent = lP ? `${lP.rank} ${lP.name}` : '';
-      grid.appendChild(lName);
-      grid.appendChild(lP ? rdrMakeStatusCell('ems',i,'oh', isWeekend ? 'weekend-default' : false) : rdrMakeStatusCell('ems',i,'oh','empty'));
-      const rName = document.createElement('div');
-      rName.className = 'att-name-cell' + (rP ? '' : ' empty');
-      rName.textContent = rP ? `${rP.rank} ${rP.name}` : '';
-      grid.appendChild(rName);
-      grid.appendChild(rP ? rdrMakeStatusCell('pm',i,'rota', isAM ? true : false) : rdrMakeStatusCell('pm',i,'rota','empty'));
-    }
+    rdrLists.ems.forEach((p, i) => {
+      const nameEl = document.createElement('div');
+      nameEl.className = 'att-name-cell';
+      nameEl.textContent = `${p.rank} ${p.name}`;
+      emsGrid.appendChild(nameEl);
+      emsGrid.appendChild(rdrMakeStatusCell('ems', i, 'oh', isWeekend ? 'weekend-default' : false));
+    });
+  }
+
+  // --- AM Rota box ---
+  const amHdr = rdrAddCell(amGrid, 'att-col-hdr span-2', '');
+  amHdr.innerHTML = `AM SHIFT ${mkRotaChip(amRota)}`;
+  if (!amPeople.length) {
+    rdrAddCell(amGrid, 'att-empty-row span-2', 'Add Rota names in Settings.');
+  } else {
+    amPeople.forEach((p, i) => {
+      const nameEl = document.createElement('div');
+      nameEl.className = 'att-name-cell';
+      nameEl.textContent = `${p.rank} ${p.name}`;
+      amGrid.appendChild(nameEl);
+      amGrid.appendChild(rdrMakeStatusCell('am', i, 'rota', false));
+    });
+  }
+
+  // --- PM Rota box ---
+  const pmHdr = rdrAddCell(pmGrid, 'att-col-hdr span-2', '');
+  pmHdr.innerHTML = `PM SHIFT ${mkRotaChip(pmRota)}`;
+  if (!pmPeople.length) {
+    rdrAddCell(pmGrid, 'att-empty-row span-2', 'Add Rota names in Settings.');
+  } else {
+    pmPeople.forEach((p, i) => {
+      const nameEl = document.createElement('div');
+      nameEl.className = 'att-name-cell';
+      nameEl.textContent = `${p.rank} ${p.name}`;
+      pmGrid.appendChild(nameEl);
+      pmGrid.appendChild(rdrMakeStatusCell('pm', i, 'rota', isAM ? true : false));
+    });
   }
 
   rdrUpdateGenerateBtn();
@@ -2421,6 +2433,43 @@ function rdrGenerate() {
   }
 }
 
+async function rdrCopyHtml() {
+  if (!S.currentRotaPersonId) {
+    showAlert({ type:'error', title:'No IC Selected',
+      bodyHTML:'Please select the <b>Current IC</b> in the Ops Log section before generating the RDR report.',
+      buttons:[{label:'OK'}] });
+    return;
+  }
+  const errBadge = el('rdr-att-err-badge');
+  if (errBadge && !errBadge.classList.contains('hidden')) {
+    showAlert({ type:'error', title:'Incomplete Attendance',
+      bodyHTML:'Some attendance entries are flagged (<span style="color:var(--danger)">!</span>). Please fill in all required fields before generating.',
+      buttons:[{label:'OK'}] });
+    return;
+  }
+  try {
+    const full = rdrBuildEmailHtml();
+    // Split at the signature marker — copy only the main content table
+    const markerIdx = full.indexOf('<!--SIGNATURE-->');
+    const bodyHtml = markerIdx !== -1
+      ? full.slice(0, markerIdx).trimEnd() + '\n</body></html>'
+      : full;
+    const htmlBlob = new Blob([bodyHtml], { type: 'text/html' });
+    await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob })]);
+    showAlert({
+      type: 'success',
+      title: ' Table Copied!',
+      bodyHTML: 'Open Outlook, create a <strong>new email</strong>, then press <strong>Ctrl+V</strong> to paste the attendance table.<br><br>' +
+                '<span style="color:var(--text-2);font-size:12px">Fill in the <strong>To</strong>, <strong>CC</strong>, <strong>Subject</strong>, and sign-off manually.<br>Use <strong>Generate .msg</strong> to get a complete file with sign-off included.</span>',
+      buttons: [], dismissAnywhere: true, dismissHint: 'Click anywhere to dismiss',
+    });
+  } catch(e) {
+    showAlert({ type:'error', title:'Copy Failed',
+      bodyHTML:`Could not write to clipboard: ${e.message}<br><br><span style="font-size:12px;color:var(--text-2)">Try using the <strong>Generate .msg File</strong> button instead.</span>`,
+      buttons:[{label:'OK'}] });
+  }
+}
+
 // Build the HTML email body
 function rdrBuildEmailHtml() {
   const { amRota, pmRota, amPeople, pmPeople } = getRdrRotaInfo();
@@ -2587,6 +2636,7 @@ function rdrBuildEmailHtml() {
 
 </table>
 
+<!--SIGNATURE-->
 <table style="border-collapse:collapse;margin-top:16px;font-family:'Century Gothic',Arial,sans-serif">
   <tr>
     <td style="padding:0 8px 0 0;vertical-align:middle">
@@ -2640,9 +2690,32 @@ function rdrBuildEmailHtml() {
 </body></html>`;
 }
 
+// Extract data: URI images from HTML, replacing each with a cid: reference.
+// Returns { html: string, attachments: Array<{cid,mimeType,bytes,ext}> }
+function rdrExtractInlineImages(html) {
+  const attachments = [];
+  let idx = 0;
+  const processed = html.replace(
+    /(<img\b[^>]*?src=")data:([^;]+);base64,([^"]+)(")/gi,
+    (match, pre, mimeType, b64, post) => {
+      const cid = `img${idx++}@ops`;
+      try {
+        const raw = atob(b64);
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        const ext = { 'image/jpeg':'.jpg', 'image/gif':'.gif',
+                      'image/svg+xml':'.svg', 'image/webp':'.webp' }[mimeType] || '.png';
+        attachments.push({ cid, mimeType, bytes, ext });
+        return `${pre}cid:${cid}${post}`;
+      } catch(_) { return match; }
+    }
+  );
+  return { html: processed, attachments };
+}
+
 // OLE2 MSG writer using SheetJS CFB library (loaded via CDN)
 function rdrBuildMsgBuffer(subject, htmlBodyStr, toAddrs, ccAddrs) {
-  if (typeof CFB === 'undefined') throw new Error('CFB library not loaded  check internet connection');
+  if (typeof CFB === 'undefined') throw new Error('CFB library not loaded — check internet connection');
 
   const enc = new TextEncoder();
   function u16(str) {
@@ -2654,23 +2727,28 @@ function rdrBuildMsgBuffer(subject, htmlBodyStr, toAddrs, ccAddrs) {
     return b;
   }
 
+  // Convert data: URIs to CID inline attachments
+  const { html: cidHtml, attachments } = rdrExtractInlineImages(htmlBodyStr);
+
   const allRecips = [
     ...(toAddrs||[]).map(e => ({ email:e.trim(), type:1 })),
     ...(ccAddrs||[]).map(e => ({ email:e.trim(), type:2 })),
   ].filter(r => r.email);
-  const recipCount = allRecips.length;
+  const recipCount   = allRecips.length;
+  const attachCount  = attachments.length;
 
-  const htmlBytes    = enc.encode(htmlBodyStr);
+  const htmlBytes    = enc.encode(cidHtml);
   const subjectBytes = u16(subject);
   const msgClsBytes  = u16('IPM.Note');
   const displayTo    = (toAddrs||[]).filter(Boolean).join('; ');
   const displayCc    = (ccAddrs||[]).filter(Boolean).join('; ');
 
   const fixedProps = [
-    [0x0E07, 0x0003, 0x0008],
-    [0x0017, 0x0003, 1],
-    [0x0023, 0x0003, 0],
-    [0x0036, 0x0003, 1],
+    [0x0E07, 0x0003, 0x0008],  // PR_MESSAGE_FLAGS = MSGFLAG_UNSENT
+    [0x0017, 0x0003, 1],        // PR_IMPORTANCE = normal
+    [0x0023, 0x0003, 0],        // PR_SENSITIVITY = normal
+    [0x0036, 0x0003, 1],        // PR_SENSITIVITY (alt)
+    [0x5909, 0x0003, 2],        // PR_MSG_EDITOR_FORMAT = HTML
   ];
   const varProps = [
     [0x001A, 0x001F, msgClsBytes.length],
@@ -2684,8 +2762,10 @@ function rdrBuildMsgBuffer(subject, htmlBodyStr, toAddrs, ccAddrs) {
 
   const propStream = new Uint8Array(32 + (fixedProps.length + varProps.length) * 16);
   const dv = new DataView(propStream.buffer);
-  dv.setUint32(8,  recipCount, true);
-  dv.setUint32(16, recipCount, true);
+  dv.setUint32(8,  recipCount,  true);   // Next Recipient ID
+  dv.setUint32(12, attachCount, true);   // Next Attachment ID
+  dv.setUint32(16, recipCount,  true);   // Recipient Count
+  dv.setUint32(20, attachCount, true);   // Attachment Count
   let off = 32;
   for (const [id, type, val] of fixedProps) {
     dv.setUint16(off, type, true); dv.setUint16(off+2, id, true);
@@ -2707,6 +2787,8 @@ function rdrBuildMsgBuffer(subject, htmlBodyStr, toAddrs, ccAddrs) {
   addStream('/__substg1.0_10130102',    htmlBytes);
   if (displayToBytes) addStream('/__substg1.0_0E04001F', displayToBytes);
   if (displayCcBytes) addStream('/__substg1.0_0E03001F', displayCcBytes);
+
+  // Recipients
   const smtpBytes = u16('SMTP');
   allRecips.forEach((r, i) => {
     const base   = `/__recip_version1.0_#${String(i).padStart(8, '0')}`;
@@ -2735,6 +2817,44 @@ function rdrBuildMsgBuffer(subject, htmlBodyStr, toAddrs, ccAddrs) {
     addStream(`${base}/__substg1.0_3002001F`,    smtpBytes);
     addStream(`${base}/__substg1.0_0076001F`,    emailB);
     addStream(`${base}/__substg1.0_3001001F`,    emailB);
+  });
+
+  // Inline image attachments (CID)
+  attachments.forEach((att, i) => {
+    const base  = `/__attach_version1.0_#${String(i).padStart(8, '0')}`;
+    const cidB  = u16(att.cid);
+    const mimeB = u16(att.mimeType);
+    const extB  = u16(att.ext);
+    const fnB   = u16(`image${i}${att.ext}`);
+    const aFixed = [
+      [0x3705, 0x0003, 1],           // PR_ATTACH_METHOD = ATTACH_BY_VALUE
+      [0x370B, 0x0003, 0xFFFFFFFF],  // PR_RENDERING_POSITION = -1 (inline)
+      [0x3714, 0x0003, 4],           // PR_ATTACH_FLAGS = ATT_MHTML_REF
+    ];
+    const aVar = [
+      [0x3701, 0x0102, att.bytes.length],  // PR_ATTACH_DATA_BIN
+      [0x3703, 0x001F, extB.length],       // PR_ATTACH_EXTENSION
+      [0x3704, 0x001F, fnB.length],        // PR_ATTACH_LONG_FILENAME
+      [0x370E, 0x001F, mimeB.length],      // PR_ATTACH_MIME_TAG
+      [0x3712, 0x001F, cidB.length],       // PR_ATTACH_CONTENT_ID
+    ];
+    const aps = new Uint8Array(8 + (aFixed.length + aVar.length) * 16);
+    const adv = new DataView(aps.buffer);
+    let ao = 8;
+    for (const [id, type, val] of aFixed) {
+      adv.setUint16(ao, type, true); adv.setUint16(ao+2, id, true);
+      adv.setUint32(ao+8, val >>> 0, true); ao += 16;
+    }
+    for (const [id, type, size] of aVar) {
+      adv.setUint16(ao, type, true); adv.setUint16(ao+2, id, true);
+      adv.setUint32(ao+8, size, true); ao += 16;
+    }
+    addStream(`${base}/__properties_version1.0`, aps);
+    addStream(`${base}/__substg1.0_37010102`,     att.bytes);
+    addStream(`${base}/__substg1.0_3703001F`,     extB);
+    addStream(`${base}/__substg1.0_3704001F`,     fnB);
+    addStream(`${base}/__substg1.0_370E001F`,     mimeB);
+    addStream(`${base}/__substg1.0_3712001F`,     cidB);
   });
 
   try { CFB.utils.cfb_del(cfb, '/\x01Sh33tJ5'); CFB.utils.cfb_gc(cfb); } catch(_) {}
@@ -2816,23 +2936,29 @@ function rdrLoadSignOff() {
   const stored = localStorage.getItem(RDR_SIGNOFF_SK);
   if (stored) rdrSignOffApply(stored);
 }
-function rdrSignOffDrop(e) {
+function rdrSignOffPaste(e) {
   e.preventDefault();
-  el('rdr-signoff-drop')?.classList.remove('drag-over');
-  const file = e.dataTransfer?.files?.[0];
-  if (!file || !file.type.startsWith('image/')) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    localStorage.setItem(RDR_SIGNOFF_SK, ev.target.result);
-    rdrSignOffApply(ev.target.result);
-  };
-  reader.readAsDataURL(file);
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (!file) continue;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        localStorage.setItem(RDR_SIGNOFF_SK, ev.target.result);
+        rdrSignOffApply(ev.target.result);
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+  }
 }
 function rdrSignOffClear() {
   rdrSignOffDataUrl = null;
   localStorage.removeItem(RDR_SIGNOFF_SK);
   const preview = el('rdr-signoff-preview');
-  if (preview) preview.innerHTML = '<span class="rdr-signoff-hint">Drag &amp; drop sign-off image here</span>';
+  if (preview) preview.innerHTML = '<span class="rdr-signoff-hint">Click here, then paste image (Ctrl+V)</span>';
   const clr = el('rdr-signoff-clear');
   if (clr) clr.style.display = 'none';
 }

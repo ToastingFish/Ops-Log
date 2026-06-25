@@ -1208,9 +1208,13 @@ function buildClipboardString(){
     for(let i=0;i<5;i++) parts.push(t.timeBlocked[i]?'BLOCKED':(t.p3Times[i]||''));
   });
 
-  // REDCON section
-  const rf=S.appliances
-    .map(a=>{ const rd=S.redconData.find(r=>r.code===a.code); return {code:a.code,personId:(rd&&rd.personId)?rd.personId:0}; })
+  // REDCON section — drive off S.redconData (the parsed alpha manning shown in
+  // the panel). parseRedcon() already reconciled it against the appliance master
+  // list, or fell back to the email's codes when no appliances are configured.
+  // (Iterating S.appliances here, as before, sent nothing when the appliance
+  // list wasn't configured — which silently dropped all alpha-manning names.)
+  const rf=S.redconData
+    .map(rd=>({ code:rd.code, personId:(rd.personId?rd.personId:0) }))
     .sort((a,b)=>{ const sa=getStnFromCode(a.code)||'',sb=getStnFromCode(b.code)||''; return sa!==sb?sa.localeCompare(sb):a.code.localeCompare(b.code,undefined,{numeric:true}); });
   parts.push(String(rf.length)); rf.forEach(r=>parts.push(r.code,String(r.personId)));
 
@@ -2400,12 +2404,47 @@ function rdrRenderResults(matched, unmatched, container) {
   }
 }
 
-//  .msg file generation 
+// Verify the Ops Log shift selection lines up with this RDR report, so the
+// sign-off IC (taken from the Ops Log Current IC) is reflective of the report.
+// Valid when: both on Auto-detect, OR both overridden to the same date + shift.
+// (Ops Log Day ↔ RDR AM, Ops Log Night ↔ RDR PM.)
+function rdrCheckOpsLogShiftMatch() {
+  const rdrAuto = rdrShiftMode === 'auto';
+  const opsAuto = S.shiftMode === 'auto';
+  if (rdrAuto && opsAuto) return { ok: true };
+
+  const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const sameYMD = (a, b) => !!a && !!b &&
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const fmt = (d, s) => d ? `${d.getDate()} ${M[d.getMonth()]} ${d.getFullYear()} ${s}` : '(no date)';
+
+  if (rdrAuto !== opsAuto) {
+    return { ok: false, body:
+      `The RDR report is on <b>${rdrAuto ? 'Auto-detect' : 'Override'}</b> while the Ops Log is on <b>${opsAuto ? 'Auto-detect' : 'Override'}</b>.<br><br>` +
+      `The sign-off IC is taken from the Ops Log's <b>Current IC</b>, so both sections must point at the same shift. ` +
+      `Set <b>both</b> to Auto-detect, or override <b>both</b> to the same date &amp; shift.<br><br>` +
+      `<span style="font-size:12px;color:var(--text-2)">Change the Ops Log override to match the RDR report.</span>` };
+  }
+
+  // Both overridden → require the same date and the same shift.
+  const opsShift = S.overrideShiftType === 'D' ? 'AM' : 'PM';
+  if (opsShift === rdrOverrideShift && sameYMD(rdrOverrideDate, S.overrideDate)) return { ok: true };
+  return { ok: false, body:
+    `The Ops Log override (<b>${fmt(S.overrideDate, opsShift)}</b>) does not match this RDR report (<b>${fmt(rdrOverrideDate, rdrOverrideShift)}</b>).<br><br>` +
+    `The sign-off IC comes from the Ops Log's <b>Current IC</b>. Change the Ops Log override to the same date and shift as this RDR report.` };
+}
+
+//  .msg file generation
 function rdrGenerate() {
   if (!S.currentRotaPersonId) {
     showAlert({ type:'error', title:'No IC Selected',
       bodyHTML:'Please select the <b>Current IC</b> in the Ops Log section before generating the RDR report.',
       buttons:[{label:'OK'}] });
+    return;
+  }
+  const shiftChk = rdrCheckOpsLogShiftMatch();
+  if (!shiftChk.ok) {
+    showAlert({ type:'error', title:'Ops Log Shift Mismatch', bodyHTML: shiftChk.body, buttons:[{label:'OK'}] });
     return;
   }
   const errBadge = el('rdr-att-err-badge');
@@ -2417,9 +2456,12 @@ function rdrGenerate() {
   }
   try {
     const subject = `RDR REPORT FOR ${rdrGetDateStr()} ${rdrDetectedShift === 'AM' ? 'AM' : 'PM'}`;
+    // Full report including the sign-off block (logo, social icons and the
+    // customizable banner). Inline data: images are turned into CID attachments
+    // by the .msg writer.
     const html    = rdrBuildEmailHtml();
     const circ    = rdrGetCirc();
-    const bytes   = rdrBuildMsgBuffer(subject, html, circ.to, circ.cc);
+    const bytes   = MsgWriter.buildMsg(subject, html, circ.to, circ.cc);
     const blob    = new Blob([bytes], { type:'application/vnd.ms-outlook' });
     const url     = URL.createObjectURL(blob);
     const a       = document.createElement('a');
@@ -2541,12 +2583,14 @@ function rdrBuildEmailHtml() {
     </td>
   </tr>` : '';
 
-  // ── sign-off IC from ops log current rota ────────────────────────────────
-  const icEntry = S.currentRotaPersonId ? S.rotas.find(r => {
-    try { return findOrAddRotaPerson(r.rota, r.rank, r.name) === S.currentRotaPersonId; } catch { return false; }
-  }) : null;
-  const icName = icEntry ? ((icEntry.rank ? icEntry.rank + ' ' : '') + icEntry.name) : '_______________';
-  const icRota = S.currentRota || '___';
+  // ── sign-off IC: taken straight from the Ops Log Current IC selection ─────
+  // (S.currentRotaPersonId points into the rota-people DB, which is exactly who
+  // was picked as Current IC — so the sign-off always reflects that person.)
+  const icPerson = S.currentRotaPersonId
+    ? (loadRotaPeopleDB().people.find(p => p.id === S.currentRotaPersonId) || null)
+    : null;
+  const icName = icPerson ? ((icPerson.rank ? icPerson.rank + ' ' : '') + icPerson.name) : '_______________';
+  const icRota = (icPerson && icPerson.rota) ? icPerson.rota : (S.currentRota || '___');
 
   const stnHdStyle = `${F};${BDR};background:#BDD7EE;color:#1F3864;font-weight:bold;padding:5px 8px;text-align:center`;
 
@@ -2637,6 +2681,7 @@ function rdrBuildEmailHtml() {
 </table>
 
 <!--SIGNATURE-->
+<table style="border-collapse:collapse;width:100%"><tr><td style="height:28px;line-height:28px;font-size:1px">&nbsp;</td></tr></table>
 <table style="border-collapse:collapse;margin-top:16px;font-family:'Century Gothic',Arial,sans-serif">
   <tr>
     <td style="padding:0 8px 0 0;vertical-align:middle">
@@ -2672,7 +2717,7 @@ function rdrBuildEmailHtml() {
   </tr>
   <tr>
     <td style="padding:6px 0 0 0">
-      <img src="${rdrSignOffDataUrl||(typeof SIG_BANNER!=='undefined'?SIG_BANNER:'')}" style="display:block;width:100%">
+      <img src="${rdrSignOffDataUrl||(typeof SIG_BANNER!=='undefined'?SIG_BANNER:'')}" width="100%" style="display:block;width:100%;height:auto">
     </td>
   </tr>
   <tr>
@@ -2690,183 +2735,8 @@ function rdrBuildEmailHtml() {
 </body></html>`;
 }
 
-// Extract data: URI images from HTML, replacing each with a cid: reference.
-// Returns { html: string, attachments: Array<{cid,mimeType,bytes,ext}> }
-function rdrExtractInlineImages(html) {
-  const attachments = [];
-  let idx = 0;
-  const processed = html.replace(
-    /(<img\b[^>]*?src=")data:([^;]+);base64,([^"]+)(")/gi,
-    (match, pre, mimeType, b64, post) => {
-      const cid = `img${idx++}@ops`;
-      try {
-        const raw = atob(b64);
-        const bytes = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-        const ext = { 'image/jpeg':'.jpg', 'image/gif':'.gif',
-                      'image/svg+xml':'.svg', 'image/webp':'.webp' }[mimeType] || '.png';
-        attachments.push({ cid, mimeType, bytes, ext });
-        return `${pre}cid:${cid}${post}`;
-      } catch(_) { return match; }
-    }
-  );
-  return { html: processed, attachments };
-}
+// .msg (Outlook OLE2/CFB) generation lives in msg-writer.js — see MsgWriter.buildMsg().
 
-// OLE2 MSG writer using SheetJS CFB library (loaded via CDN)
-function rdrBuildMsgBuffer(subject, htmlBodyStr, toAddrs, ccAddrs) {
-  if (typeof CFB === 'undefined') throw new Error('CFB library not loaded — check internet connection');
-
-  const enc = new TextEncoder();
-  function u16(str) {
-    const b = new Uint8Array((str.length + 1) * 2);
-    for (let i = 0; i < str.length; i++) {
-      b[i*2]   = str.charCodeAt(i) & 0xFF;
-      b[i*2+1] = str.charCodeAt(i) >> 8;
-    }
-    return b;
-  }
-
-  // Convert data: URIs to CID inline attachments
-  const { html: cidHtml, attachments } = rdrExtractInlineImages(htmlBodyStr);
-
-  const allRecips = [
-    ...(toAddrs||[]).map(e => ({ email:e.trim(), type:1 })),
-    ...(ccAddrs||[]).map(e => ({ email:e.trim(), type:2 })),
-  ].filter(r => r.email);
-  const recipCount   = allRecips.length;
-  const attachCount  = attachments.length;
-
-  const htmlBytes    = enc.encode(cidHtml);
-  const subjectBytes = u16(subject);
-  const msgClsBytes  = u16('IPM.Note');
-  const displayTo    = (toAddrs||[]).filter(Boolean).join('; ');
-  const displayCc    = (ccAddrs||[]).filter(Boolean).join('; ');
-
-  const msgFlags = 0x0008 | (attachCount > 0 ? 0x0010 : 0); // MSGFLAG_UNSENT | MSGFLAG_HASATTACH
-  const fixedProps = [
-    [0x0E07, 0x0003, msgFlags], // PR_MESSAGE_FLAGS
-    [0x0017, 0x0003, 1],        // PR_IMPORTANCE = normal
-    [0x0023, 0x0003, 0],        // PR_SENSITIVITY = normal
-    [0x0036, 0x0003, 1],        // PR_SENSITIVITY (alt)
-    [0x5909, 0x0003, 2],        // PR_MSG_EDITOR_FORMAT = HTML
-  ];
-  const varProps = [
-    [0x001A, 0x001F, msgClsBytes.length],
-    [0x0037, 0x001F, subjectBytes.length],
-    [0x1013, 0x0102, htmlBytes.length],
-  ];
-  const displayToBytes = displayTo ? u16(displayTo) : null;
-  const displayCcBytes = displayCc ? u16(displayCc) : null;
-  if (displayToBytes) varProps.push([0x0E04, 0x001F, displayToBytes.length]);
-  if (displayCcBytes) varProps.push([0x0E03, 0x001F, displayCcBytes.length]);
-
-  const propStream = new Uint8Array(32 + (fixedProps.length + varProps.length) * 16);
-  const dv = new DataView(propStream.buffer);
-  dv.setUint32(8,  recipCount,  true);   // Next Recipient ID
-  dv.setUint32(12, attachCount, true);   // Next Attachment ID
-  dv.setUint32(16, recipCount,  true);   // Recipient Count
-  dv.setUint32(20, attachCount, true);   // Attachment Count
-  let off = 32;
-  for (const [id, type, val] of fixedProps) {
-    dv.setUint16(off, type, true); dv.setUint16(off+2, id, true);
-    dv.setUint32(off+8, val, true); off += 16;
-  }
-  for (const [id, type, size] of varProps) {
-    dv.setUint16(off, type, true); dv.setUint16(off+2, id, true);
-    dv.setUint32(off+8, size, true); off += 16;
-  }
-
-  const cfb = CFB.utils.cfb_new({ root: 'Root Entry' });
-  function addStream(path, data) {
-    CFB.utils.cfb_add(cfb, path, data instanceof Uint8Array ? data : new Uint8Array(data));
-  }
-
-  addStream('/__properties_version1.0', propStream);
-  addStream('/__substg1.0_001A001F',    msgClsBytes);
-  addStream('/__substg1.0_0037001F',    subjectBytes);
-  addStream('/__substg1.0_10130102',    htmlBytes);
-  if (displayToBytes) addStream('/__substg1.0_0E04001F', displayToBytes);
-  if (displayCcBytes) addStream('/__substg1.0_0E03001F', displayCcBytes);
-
-  // Recipients
-  const smtpBytes = u16('SMTP');
-  allRecips.forEach((r, i) => {
-    const base   = `/__recip_version1.0_#${String(i).padStart(8, '0')}`;
-    const emailB = u16(r.email);
-    const rFixed = [
-      [0x0FFE, 0x0003, 6],
-      [0x0C15, 0x0003, r.type],
-    ];
-    const rVar = [
-      [0x3002, 0x001F, smtpBytes.length],
-      [0x0076, 0x001F, emailB.length],
-      [0x3001, 0x001F, emailB.length],
-    ];
-    const rps = new Uint8Array(8 + (rFixed.length + rVar.length) * 16);
-    const rdv = new DataView(rps.buffer);
-    let ro = 8;
-    for (const [id, type, val] of rFixed) {
-      rdv.setUint16(ro, type, true); rdv.setUint16(ro+2, id, true);
-      rdv.setUint32(ro+8, val, true); ro += 16;
-    }
-    for (const [id, type, size] of rVar) {
-      rdv.setUint16(ro, type, true); rdv.setUint16(ro+2, id, true);
-      rdv.setUint32(ro+8, size, true); ro += 16;
-    }
-    addStream(`${base}/__properties_version1.0`, rps);
-    addStream(`${base}/__substg1.0_3002001F`,    smtpBytes);
-    addStream(`${base}/__substg1.0_0076001F`,    emailB);
-    addStream(`${base}/__substg1.0_3001001F`,    emailB);
-  });
-
-  // Inline image attachments (CID)
-  attachments.forEach((att, i) => {
-    const base  = `/__attach_version1.0_#${String(i).padStart(8, '0')}`;
-    const cidB  = u16(att.cid);
-    const mimeB = u16(att.mimeType);
-    const extB  = u16(att.ext);
-    const fnB   = u16(`image${i}${att.ext}`);
-    const aFixed = [
-      [0x0E21, 0x0003, i],           // PR_ATTACH_NUM = attachment index
-      [0x3705, 0x0003, 1],           // PR_ATTACH_METHOD = ATTACH_BY_VALUE
-      [0x370B, 0x0003, 0xFFFFFFFF],  // PR_RENDERING_POSITION = -1 (inline)
-      [0x3714, 0x0003, 4],           // PR_ATTACH_FLAGS = ATT_MHTML_REF
-    ];
-    const aVar = [
-      [0x3701, 0x0102, att.bytes.length],  // PR_ATTACH_DATA_BIN
-      [0x3703, 0x001F, extB.length],       // PR_ATTACH_EXTENSION
-      [0x3704, 0x001F, fnB.length],        // PR_ATTACH_LONG_FILENAME
-      [0x370E, 0x001F, mimeB.length],      // PR_ATTACH_MIME_TAG
-      [0x3712, 0x001F, cidB.length],       // PR_ATTACH_CONTENT_ID
-    ];
-    const aps = new Uint8Array(8 + (aFixed.length + aVar.length) * 16);
-    const adv = new DataView(aps.buffer);
-    let ao = 8;
-    for (const [id, type, val] of aFixed) {
-      adv.setUint16(ao, type, true); adv.setUint16(ao+2, id, true);
-      adv.setUint32(ao+8, val >>> 0, true); ao += 16;
-    }
-    for (const [id, type, size] of aVar) {
-      adv.setUint16(ao, type, true); adv.setUint16(ao+2, id, true);
-      adv.setUint32(ao+8, size, true); ao += 16;
-    }
-    addStream(`${base}/__properties_version1.0`, aps);
-    addStream(`${base}/__substg1.0_37010102`,     att.bytes);
-    addStream(`${base}/__substg1.0_3703001F`,     extB);
-    addStream(`${base}/__substg1.0_3704001F`,     fnB);
-    addStream(`${base}/__substg1.0_370E001F`,     mimeB);
-    addStream(`${base}/__substg1.0_3712001F`,     cidB);
-  });
-
-  try { CFB.utils.cfb_del(cfb, '/\x01Sh33tJ5'); CFB.utils.cfb_gc(cfb); } catch(_) {}
-
-  const rootEntry = cfb.FileIndex[0];
-  if (rootEntry) rootEntry.clsid = '0B0D020000000000C000000000000046';
-
-  const raw = CFB.write(cfb, { type: 'array' });
-  return new Uint8Array(raw);
-}
 
 //  OH Settings drag-drop 
 let _rdrDragSrc=null,_rdrDragTab=null;

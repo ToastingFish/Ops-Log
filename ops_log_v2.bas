@@ -1269,17 +1269,17 @@ End Function
 '====================================================
 Private Sub SetCommonColumnWidths(ByVal ws As Worksheet, ByVal baseCol As Long, ByVal isDay As Boolean)
 
-    ws.Columns(baseCol + 0).ColumnWidth = 8
-    ws.Columns(baseCol + 1).ColumnWidth = 8
-    ws.Columns(baseCol + 2).ColumnWidth = 8
-    ws.Columns(baseCol + 3).ColumnWidth = 8
-    ws.Columns(baseCol + 4).ColumnWidth = 8
-    ws.Columns(baseCol + 5).ColumnWidth = 40
+    ws.Columns(baseCol + 0).ColumnWidth = 12
+    ws.Columns(baseCol + 1).ColumnWidth = 12
+    ws.Columns(baseCol + 2).ColumnWidth = 12
+    ws.Columns(baseCol + 3).ColumnWidth = 12
+    ws.Columns(baseCol + 4).ColumnWidth = 12
+    ws.Columns(baseCol + 5).ColumnWidth = 78
     ws.Columns(baseCol + 6).ColumnWidth = 12
-    ws.Columns(baseCol + 7).ColumnWidth = 40
-    ws.Columns(baseCol + 8).ColumnWidth = 8
-    ws.Columns(baseCol + 9).ColumnWidth = 12
-    ws.Columns(baseCol + 10).ColumnWidth = 20
+    ws.Columns(baseCol + 7).ColumnWidth = 78
+    ws.Columns(baseCol + 8).ColumnWidth =12
+    ws.Columns(baseCol + 9).ColumnWidth = 18
+    ws.Columns(baseCol + 10).ColumnWidth = 30
 
 End Sub
 
@@ -1292,7 +1292,7 @@ Private Sub FormatReportBlock( _
 
     With ws.Range(ws.Cells(baseRow, baseCol), ws.Cells(bottomRow, baseCol + lastOffset))
         .Font.Name = "Segoe UI"
-        .Font.Size = 11
+        .Font.Size = 16
         .HorizontalAlignment = xlCenter
         .VerticalAlignment = xlCenter
         .WrapText = True
@@ -1309,7 +1309,7 @@ Private Sub DrawHeader(ByVal ws As Worksheet, ByVal rowNum As Long, ByVal baseCo
         .Merge
         .Value = txt
         .Font.Bold = True
-        .Font.Size = 12
+        .Font.Size = 20
         .Interior.Color = RGB(217, 217, 217)
     End With
 
@@ -1322,7 +1322,7 @@ Private Sub DrawFooter(ByVal ws As Worksheet, ByVal rowNum As Long, ByVal baseCo
         .Merge
         .Value = txt
         .Font.Bold = True
-        .Font.Size = 12
+        .Font.Size = 20
         .Interior.Color = RGB(217, 217, 217)
     End With
 

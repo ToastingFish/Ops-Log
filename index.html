@@ -85,7 +85,25 @@
         <button class="settings-close-btn" onclick="closeSettings()">✕</button>
       </div>
       <div class="settings-modal-body">
+        <!-- Global Settings section -->
         <div class="settings-section-head">
+          <span class="field-label" style="margin:0">Global Settings</span>
+          <span class="settings-hint" style="font-size:10px;color:var(--text-3);font-weight:400;margin-left:8px">Back up or restore every setting below in one step</span>
+        </div>
+        <div class="settings-add-form">
+          <button class="secondary-btn" onclick="exportAllSettings()">Copy All Settings to Clipboard</button>
+        </div>
+        <details class="settings-import-block">
+          <summary>Quick import all settings…</summary>
+          <p class="settings-import-hint">Paste a backup created by <strong>Copy All Settings to Clipboard</strong>.<br>
+            <em>⚠ Replaces <strong>all</strong> settings — rota personnel, OH personnel, appliances, recipients, reasons, circulation list and sign-off image.</em>
+          </p>
+          <textarea class="settings-import-box" id="global-import-text" rows="4"
+            placeholder="Paste settings backup here…"></textarea>
+          <button class="secondary-btn" onclick="importAllSettings()">Import</button>
+        </details>
+
+        <div class="settings-section-head" style="margin-top:18px">
           <span class="field-label" style="margin:0">Rota Personnel</span>
         </div>
         <div id="rota-entries-list" class="rota-entries-list"></div>

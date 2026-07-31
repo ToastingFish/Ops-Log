@@ -369,7 +369,8 @@ function computeShift(refDate) {
   const dp = Math.floor((sd - CYCLE_START)/86400000);
   const cy = ((dp % 6)+6)%6+1;
   const [cur,inc] = ROTA_MAP[cy][isNight?'night':'day'];
-  return { shiftLabel: isNight?'Night':'Day', currentRota: cur, incomingRota: inc };
+  // sd is the date the shift *started* on  for 00:00-07:59 that's the previous day
+  return { shiftLabel: isNight?'Night':'Day', currentRota: cur, incomingRota: inc, shiftDate: sd };
 }
 function applyShiftResult(r) {
   S.detectedShiftLabel = r.shiftLabel; S.currentRota = r.currentRota; S.incomingRota = r.incomingRota;
@@ -380,8 +381,8 @@ function applyShiftResult(r) {
   // Auto-detect display: show date + shift label
   const autoDisp = el('auto-detect-display');
   if (autoDisp && S.shiftMode !== 'override') {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+    const disp = r.shiftDate || new Date();
+    const dateStr = disp.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
     autoDisp.innerHTML = `<span class="auto-detect-date">${dateStr}</span><span class="auto-detect-shift">${r.shiftLabel} Shift ${icon}</span>`;
     autoDisp.classList.remove('hidden');
   } else if (autoDisp) {
@@ -449,9 +450,9 @@ function renderCalendar() {
   const sel = _calendarMode === 'rdr' ? rdrOverrideDate : S.overrideDate;
   const first=new Date(calViewYear,calViewMonth,1);
   const startDow=first.getDay(); const dim=new Date(calViewYear,calViewMonth+1,0).getDate();
-  let html=`<div class="cal-header"><button class="cal-nav" onclick="calNav(-1)"></button>
+  let html=`<div class="cal-header"><button class="cal-nav" onclick="calNav(-1)" aria-label="Previous month">&lsaquo;</button>
     <span class="cal-month-label">${months[calViewMonth]} ${calViewYear}</span>
-    <button class="cal-nav" onclick="calNav(1)"></button></div><div class="cal-grid">
+    <button class="cal-nav" onclick="calNav(1)" aria-label="Next month">&rsaquo;</button></div><div class="cal-grid">
     ${['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=>`<div class="cal-dow">${d}</div>`).join('')}`;
   for(let i=0;i<startDow;i++) html+=`<div class="cal-day empty"></div>`;
   for(let d=1;d<=dim;d++){
@@ -1346,6 +1347,10 @@ function confirmTimingEditor(){
 // CALENDAR POPUP
 // =============================================
 function openCalendarPopup(){
+  _calendarMode = 'opslog';
+  const d = S.overrideDate || new Date();
+  calViewYear = d.getFullYear(); calViewMonth = d.getMonth();
+  renderCalendar();
   el('calendar-overlay').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }

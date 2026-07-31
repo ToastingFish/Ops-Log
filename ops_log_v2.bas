@@ -522,7 +522,7 @@ Private Sub BuildDayReport( _
     Dim bottomRow As Long
 
     hotoStartRow = baseRow + n + 1
-    hotoEndRow = hotoStartRow + 6
+    hotoEndRow = hotoStartRow + 5
     bottomRow = hotoEndRow + 1
 
     FormatReportBlock ws, baseRow, baseCol, bottomRow, 10
@@ -641,7 +641,7 @@ Private Sub BuildNightReport( _
     noticeStartRow = baseRow + after2359Index + 1
     noticeEndRow = noticeStartRow + 2
     hotoStartRow = baseRow + n + 4
-    hotoEndRow = hotoStartRow + 6
+    hotoEndRow = hotoStartRow + 5
     bottomRow = hotoEndRow + 1
 
     FormatReportBlock ws, baseRow, baseCol, bottomRow, 10
@@ -1526,9 +1526,8 @@ Private Sub DrawHOTO( _
     MergeMiddleText ws, startRow + 1, baseCol, "HOTO comprises of", False
     MergeMiddleText ws, startRow + 2, baseCol, "1. FCV Equipment", False
     MergeMiddleText ws, startRow + 3, baseCol, "2. Physical Recall Kit - 9 Nominal Roll, DO, ADO, RDR, ARMS II Guide, 15 pens, 5 Markers.", False
-    MergeMiddleText ws, startRow + 4, baseCol, "3. Comms Equipment - As per list in infocomms equipment HOTO.", False
-    MergeMiddleText ws, startRow + 5, baseCol, "4. Files and Directives - List of the files are at the Cabinet 1 and 2. *(HRI 70 Files and Ops Directive)", False
-    MergeMiddleText ws, startRow + 6, baseCol, "5. Keypress - Keypress Book", False
+    MergeMiddleText ws, startRow + 4, baseCol, "3. Files and Directives - List of the files are at the Cabinet 1 and 2. *(HRI 70 Files and Ops Directive)", False
+    MergeMiddleText ws, startRow + 5, baseCol, "4. Transport Keypress Book", False
 
     With ws.Range(ws.Cells(startRow, baseCol + 8), ws.Cells(endRow, baseCol + 8))
         .ClearContents

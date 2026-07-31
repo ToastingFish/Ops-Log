@@ -2476,7 +2476,8 @@ function rdrGenerate() {
     // by the .msg writer.
     const html    = rdrBuildEmailHtml();
     const circ    = rdrGetCirc();
-    const bytes   = MsgWriter.buildMsg(subject, html, circ.to, circ.cc);
+    // Every RDR .msg is stamped with the "RDR REPORT" Outlook category.
+    const bytes   = MsgWriter.buildMsg(subject, html, circ.to, circ.cc, ['RDR REPORT']);
     const blob    = new Blob([bytes], { type:'application/vnd.ms-outlook' });
     const url     = URL.createObjectURL(blob);
     const a       = document.createElement('a');

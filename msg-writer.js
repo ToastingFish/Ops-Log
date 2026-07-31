@@ -8,14 +8,15 @@
  *            [MS-OXRTFCP] RTF compression, [MS-OXRTFEX] HTML-in-RTF.
  *
  * Public API:
- *   MsgWriter.buildMsg(subject, htmlBodyStr, toAddrs, ccAddrs) -> Uint8Array
+ *   MsgWriter.buildMsg(subject, htmlBodyStr, toAddrs, ccAddrs, categories)
+ *     -> Uint8Array   (categories: optional array of Outlook category names)
  *
  * WHY THIS FILE IS THE WAY IT IS (hard-won, verified against real Outlook):
  *   Outlook's MAPI reader rejects ("Cannot read the item") any .msg that is
  *   missing the message structure it expects. A minimal HTML-only message is
  *   NOT enough. To open, a .msg must contain ALL of:
  *     1. The named-property mapping storage __nameid_version1.0 (3 streams,
- *        may be empty).
+ *        may be empty — but see buildNameId() once named properties are used).
  *     2. A valid compressed RTF body (PidTagRtfCompressed, 0x10090102). Outlook
  *        requires it even when HTML is present. We synthesise it by wrapping the
  *        HTML as encapsulated RTF (\fromhtml1) and LZFu-compressing it.
@@ -38,7 +39,7 @@
 
   // ── Property type tags (PtypXxx) ──────────────────────────────────────────
   var PT_LONG = 0x0003, PT_BOOL = 0x000B, PT_TIME = 0x0040,
-      PT_STRING8 = 0x001E, PT_BINARY = 0x0102;
+      PT_STRING8 = 0x001E, PT_BINARY = 0x0102, PT_MV_STRING8 = 0x101E;
 
   // ── Windows-1252 / Latin-1 encode (NO null terminator) ────────────────────
   function ansiBytes(str) {
@@ -52,7 +53,15 @@
   }
 
   function hex4(n) { return ('0000' + n.toString(16)).slice(-4).toUpperCase(); }
+  function hex8(n) { return ('00000000' + n.toString(16)).slice(-8).toUpperCase(); }
   function substgName(id, type) { return '__substg1.0_' + hex4(id) + hex4(type); }
+
+  function concatBytes(parts) {
+    var total = parts.reduce(function (n, p) { return n + p.length; }, 0);
+    var out = new Uint8Array(total), off = 0;
+    parts.forEach(function (p) { out.set(p, off); off += p.length; });
+    return out;
+  }
 
   // ── Current time as a Windows FILETIME (100-ns ticks since 1601), 8 bytes LE
   function fileTimeNow() {
@@ -156,6 +165,106 @@
     return out;
   }
 
+  // ── Named-property mapping: __nameid_version1.0 ────────────────────────────
+  // [MS-OXMSG] 2.2.3. A named property (e.g. Categories = the "Keywords" name in
+  // the public-strings set) is addressed by a property id from 0x8000 up, and
+  // that id only means anything because these streams map it back to
+  // (GUID, name). Four streams are involved:
+  //   00020102  GUID stream   — the property-set GUIDs, indexed from 3 (1 and 2
+  //                             are the implicit PS_MAPI / PS_PUBLIC_STRINGS).
+  //   00030102  entry stream  — 8 bytes per property, in id order: string offset,
+  //                             then (guidIndex<<1)|1 for a string-named prop,
+  //                             then the property index (id - 0x8000).
+  //   00040102  string stream — 4-byte length + UTF-16LE name, padded to 4 bytes.
+  //   XXXX0102  hash buckets  — same 8-byte record, keyed by CRC of the name.
+  // The bucket stream is NOT optional and the bucket number must be exactly the
+  // one Outlook expects: a file identical in every other byte, with the record
+  // filed one bucket over, reads back with no categories at all. The documented
+  // "0x1000 + (crc MOD 0x1F)" rule does not reproduce what Outlook writes — 40
+  // named properties round-tripped through Outlook matched no modulus of the
+  // stored CRC — so the bucket is taken from BUCKETS below, observed directly
+  // from .msg files Outlook saved. Adding a named property means measuring its
+  // bucket the same way rather than guessing.
+  // The CRC is the same one MS-OXRTFCP uses, so rtfCrc() is reused here.
+  var PS_PUBLIC_STRINGS = new Uint8Array([
+    0x29, 0x03, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46
+  ]);
+
+  function utf16Bytes(str) {
+    var b = new Uint8Array(str.length * 2);
+    var dv = new DataView(b.buffer);
+    for (var i = 0; i < str.length; i++) dv.setUint16(i * 2, str.charCodeAt(i), true);
+    return b;
+  }
+
+  // Bucket stream index per named property, read off .msg files written by
+  // Outlook itself (see the note above — do not compute these).
+  var BUCKETS = { 'Keywords': 0x15 };
+
+  function sameGuid(a, b) {
+    for (var k = 0; k < 16; k++) if (a[k] !== b[k]) return false;
+    return true;
+  }
+
+  function record8(a, b, c) {
+    var r = new Uint8Array(8), dv = new DataView(r.buffer);
+    dv.setUint32(0, a >>> 0, true);
+    dv.setUint16(4, b, true);
+    dv.setUint16(6, c, true);
+    return r;
+  }
+
+  // names: [{ name: 'Keywords', guid: Uint8Array(16) }, ...]
+  // -> { streams: [[path, bytes], ...], ids: [0x8000, ...] }
+  function buildNameId(names) {
+    var guids = [], entries = [], strings = [], buckets = {}, ids = [];
+
+    names.forEach(function (np, idx) {
+      // Indices 1 and 2 are implicit (PS_MAPI / PS_PUBLIC_STRINGS) and must NOT
+      // be re-added to the GUID stream — Outlook writes kind 0x0005 (index 2)
+      // for Keywords, and does not resolve it if you list the GUID at index 3.
+      var guidIndex = sameGuid(np.guid, PS_PUBLIC_STRINGS) ? 2 : -1;
+      if (guidIndex < 0) {
+        var gi = -1;
+        for (var g = 0; g < guids.length; g++) if (sameGuid(guids[g], np.guid)) { gi = g; break; }
+        if (gi < 0) { gi = guids.length; guids.push(np.guid); }
+        guidIndex = gi + 3;
+      }
+
+      var nameBytes = utf16Bytes(np.name);
+      var strOffset = strings.reduce(function (n, s) { return n + s.length; }, 0);
+      var rec = new Uint8Array((4 + nameBytes.length + 3) & ~3); // pad to 4 bytes
+      new DataView(rec.buffer).setUint32(0, nameBytes.length, true);
+      rec.set(nameBytes, 4);
+      strings.push(rec);
+
+      var kind = (guidIndex << 1) | 1;   // low bit set ⇒ named by string
+      entries.push(record8(strOffset, kind, idx));
+
+      if (!(np.name in BUCKETS)) {
+        throw new Error('msg-writer: no verified hash bucket for named property "' +
+                        np.name + '" — measure it from an Outlook-saved .msg');
+      }
+      var hash = rtfCrc(nameBytes);
+      var bucket = 0x1000 + BUCKETS[np.name];
+      (buckets[bucket] = buckets[bucket] || []).push(record8(hash, kind, idx));
+
+      ids.push(0x8000 + idx);
+    });
+
+    var base = '/__nameid_version1.0/';
+    var streams = [
+      [base + '__substg1.0_00020102', concatBytes(guids)],
+      [base + '__substg1.0_00030102', concatBytes(entries)],
+      [base + '__substg1.0_00040102', concatBytes(strings)]
+    ];
+    Object.keys(buckets).forEach(function (b) {
+      streams.push([base + '__substg1.0_' + hex4(+b) + '0102', concatBytes(buckets[b])]);
+    });
+    return { streams: streams, ids: ids };
+  }
+
   // ── Convert <img src="data:..."> into CID inline attachments ───────────────
   function extractInlineImages(html) {
     var attachments = [];
@@ -209,6 +318,24 @@
       } else if (type === PT_BINARY) {
         dv.setUint32(off + 8, value.length, true);
         subs.push([substgName(id, type), value]);
+      } else if (type === PT_MV_STRING8) {
+        // Multi-valued strings live in N+1 streams: a length stream (4 bytes per
+        // element) plus one "<name>-XXXXXXXX" stream per element. NOTE the
+        // element streams DO store the terminating null and the length counts it
+        // — the opposite of single-valued PT_STRING8 above. Verified against a
+        // .msg saved by Outlook itself. The size recorded in the property entry
+        // is the size of the LENGTH stream, not of the text.
+        var lens = new Uint8Array(value.length * 4);
+        var ldv = new DataView(lens.buffer);
+        for (var e = 0; e < value.length; e++) {
+          var eb = ansiBytes(value[e]);
+          var withNull = new Uint8Array(eb.length + 1);
+          withNull.set(eb, 0);
+          ldv.setUint32(e * 4, withNull.length, true);
+          subs.push([substgName(id, type) + '-' + hex8(e), withNull]);
+        }
+        dv.setUint32(off + 8, lens.length, true);
+        subs.push([substgName(id, type), lens]);
       }
       off += 16;
     }
@@ -216,11 +343,12 @@
   }
 
   // ── Build the full .msg ────────────────────────────────────────────────────
-  function buildMsg(subject, htmlBodyStr, toAddrs, ccAddrs) {
+  function buildMsg(subject, htmlBodyStr, toAddrs, ccAddrs, categories) {
     if (typeof CFB === 'undefined') {
       throw new Error('CFB library not loaded — check internet connection');
     }
     subject = subject || '';
+    categories = (categories || []).filter(Boolean);
 
     var inline = extractInlineImages(htmlBodyStr);
     var cidHtml = inline.html;
@@ -268,6 +396,16 @@
       [0x1009, PT_BINARY, rtf],        // PidTagRtfCompressed
     ];
 
+    // Outlook categories = the string-named property "Keywords" in
+    // PS_PUBLIC_STRINGS. Only the NAME travels in the file; the colour comes
+    // from the master category list of whichever mailbox opens it.
+    var nameid = buildNameId(categories.length
+      ? [{ name: 'Keywords', guid: PS_PUBLIC_STRINGS }]
+      : []);
+    if (categories.length) {
+      topProps.push([nameid.ids[0], PT_MV_STRING8, categories]);
+    }
+
     var top = buildPropStream(32, topProps, function (dv) {
       dv.setUint32(8, recipCount, true);   // Next Recipient ID
       dv.setUint32(12, attachCount, true); // Next Attachment ID
@@ -283,10 +421,9 @@
     add('/__properties_version1.0', top.stream);
     top.subs.forEach(function (s) { add('/' + s[0], s[1]); });
 
-    // Required named-property mapping storage (empty — no named properties).
-    add('/__nameid_version1.0/__substg1.0_00020102', new Uint8Array(0));
-    add('/__nameid_version1.0/__substg1.0_00030102', new Uint8Array(0));
-    add('/__nameid_version1.0/__substg1.0_00040102', new Uint8Array(0));
+    // Required named-property mapping storage (empty streams when there are no
+    // named properties — the storage itself is mandatory either way).
+    nameid.streams.forEach(function (s) { add(s[0], s[1]); });
 
     // Recipients
     recips.forEach(function (r, i) {

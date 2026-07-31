@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ops Log Control Panel</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20260629b">
 </head>
 <body>
 
@@ -567,14 +567,11 @@
             <span class="err-badge hidden" id="rdr-att-err-badge">!</span>
           </div>
           <div class="att-grids-wrap">
-            <div class="att-col">
-              <div class="att-grid" id="rdr-att-ops"></div>
-              <div class="att-grid" id="rdr-att-ems"></div>
-            </div>
-            <div class="att-col">
-              <div class="att-grid" id="rdr-att-am"></div>
-              <div class="att-grid" id="rdr-att-pm"></div>
-            </div>
+            <div class="att-grid" id="rdr-att-am"></div>
+            <div class="att-grid" id="rdr-att-pm"></div>
+            <div class="att-row-sep"></div>
+            <div class="att-grid" id="rdr-att-ops"></div>
+            <div class="att-grid" id="rdr-att-ems"></div>
           </div>
         </section>
 
@@ -607,8 +604,8 @@
   </div><!-- end #view-rdr -->
 
   <script src="https://cdn.jsdelivr.net/npm/cfb/dist/cfb.min.js"></script>
-  <script src="sig-images.js"></script>
-  <script src="msg-writer.js"></script>
-  <script src="app.js"></script>
+  <script src="sig-images.js?v=20260629b"></script>
+  <script src="msg-writer.js?v=20260629b"></script>
+  <script src="app.js?v=20260629b"></script>
 </body>
 </html>

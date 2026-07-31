@@ -677,7 +677,7 @@ function renderTurnoutCardHTML(t, idx){
   return `<div class="turnout-card" id="turnout-card-${idx}">
     <div class="turnout-card-header">
       <span class="turnout-card-title">Turnout #${idx+1}</span>
-      <button class="turnout-remove-btn" onclick="removeTurnout(${idx})" title="Remove"></button>
+      <button class="turnout-remove-btn" onclick="removeTurnout(${idx})" title="Remove">&times;</button>
     </div>
     <div class="turnout-type-row">
       <label class="field-label" style="margin-bottom:4px">What turned out?</label>
@@ -2339,7 +2339,10 @@ function rdrParseAndApply(text, target, resEl) {
   for (const rawLine of lines) {
     const line = rdrStripEmoji(rawLine).replace(/[]/g,'-').trim();
     if (!line) continue;
-    const dm = line.match(/^(.+?)\s*-+\s*(.+)$/);
+    // Allow an empty status after the dash so a symbols-only line such as
+    // "CPL TAN - ✅✅" (which becomes "CPL TAN -" once emoji are stripped) is
+    // still captured rather than silently dropped.
+    const dm = line.match(/^(.+?)\s*-+\s*(.*)$/);
     if (!dm) continue;
     const namePart   = dm[1].trim().toUpperCase();
     const statusPart = dm[2].trim();
@@ -2348,7 +2351,14 @@ function rdrParseAndApply(text, target, resEl) {
     if (target === 'oh' && !rdrStartsWithRank(namePart)) continue;
 
     const att = rdrParseStatusText(statusPart, personType);
-    if (!att.stype) { unmatched.push({ name:namePart, raw:statusPart }); continue; }
+    if (!att.stype) {
+      // No recognised status. Flag the name for quick reference. An empty
+      // statusPart means only symbols/emoji were typed (they get stripped) —
+      // still flag it, but skip lines that genuinely had nothing after the dash.
+      if (!statusPart && rdrStripEmoji(rawLine) === rawLine) continue;
+      unmatched.push({ name:namePart, raw:statusPart });
+      continue;
+    }
 
     let found = false;
     for (const { key, list } of searches) {
@@ -2512,6 +2522,42 @@ async function rdrCopyHtml() {
   }
 }
 
+// Outlook's HTML *paste* sanitizer (used by "Copy Table") silently ignores
+// several CSS properties on <td> cells — `text-align`, `vertical-align` and
+// `background` are dropped, and inline text `color` can be lost too — so a
+// pasted table looks different from the same HTML rendered inside a .msg.
+// Mirroring those styles into the legacy HTML attributes/tags that the
+// Word/Outlook paste engine still honours (align, valign, bgcolor, <font
+// color>) makes the pasted table match the .msg table exactly. Applied to both
+// outputs so they stay byte-identical.
+function rdrOutlookSafeHtml(html) {
+  // 1. Per <td>: mirror alignment + background into legacy attributes.
+  html = html.replace(/<td\b([^>]*?)style="([^"]*)"/gi, (m, pre, style) => {
+    let attrs = '';
+    if (!/\balign=/i.test(pre)) {
+      const ta = style.match(/text-align\s*:\s*(left|right|center|justify)/i);
+      if (ta) attrs += ` align="${ta[1].toLowerCase()}"`;
+    }
+    if (!/\bvalign=/i.test(pre)) {
+      const va = style.match(/vertical-align\s*:\s*(top|middle|bottom)/i);
+      if (va) attrs += ` valign="${va[1].toLowerCase()}"`;
+    }
+    if (!/\bbgcolor=/i.test(pre)) {
+      const bg = style.match(/background(?:-color)?\s*:\s*(#[0-9A-Fa-f]{3,6})/i);
+      if (bg) attrs += ` bgcolor="${bg[1]}"`;
+    }
+    return `<td${pre}${attrs} style="${style}"`;
+  });
+  // 2. Wrap colour-styled <span>s in a legacy <font> tag — the Word paste engine
+  //    preserves <font color> reliably where it can drop the CSS `color` (e.g.
+  //    the red "(reason)" after an OUT status).
+  html = html.replace(
+    /<span style="color:\s*(#[0-9A-Fa-f]{3,6})[^"]*">([\s\S]*?)<\/span>/gi,
+    (m, c) => `<font color="${c}">${m}</font>`
+  );
+  return html;
+}
+
 // Build the HTML email body
 function rdrBuildEmailHtml() {
   const { amRota, pmRota, amPeople, pmPeople } = getRdrRotaInfo();
@@ -2594,7 +2640,7 @@ function rdrBuildEmailHtml() {
 
   const stnHdStyle = `${F};${BDR};background:#BDD7EE;color:#1F3864;font-weight:bold;padding:5px 8px;text-align:center`;
 
-  return `<html><head><meta charset="utf-8"></head>
+  return rdrOutlookSafeHtml(`<html><head><meta charset="utf-8"></head>
 <body style="${F};margin:0;padding:8px">
 <table style="${tbl}">
 
@@ -2639,7 +2685,7 @@ function rdrBuildEmailHtml() {
 
   <!-- KEYPRESS RECORD -->
   <tr><td style="${hd};text-align:center" colspan="4">KEYPRESS RECORD</td></tr>
-  <tr><td style="${td};color:#FF0000;text-align:center" colspan="4">NO KEYPRESS RECORDS</td></tr>
+  <tr><td style="${td};color:#FF0000;text-align:center" colspan="4">NO KEYS DRAWN</td></tr>
 
   <!-- ATTENDANCE BANNER -->
   <tr>
@@ -2662,8 +2708,8 @@ function rdrBuildEmailHtml() {
 
   <!-- OPS LOG BANNER + EMPTY PASTE ROW -->
   <tr>
-    <td style="${hd};font-size:10pt;padding:6px 8px" colspan="4">
-      OPS LOG &mdash; INCLUDES OPS LOG, REPORT SICK LOG AND ALL FAXES / INSTRUCTIONS COMING IN (End of Each Shift)
+    <td style="${hd};font-size:10pt;padding:6px 8px;text-align:center" colspan="4">
+      OPS LOG
     </td>
   </tr>
   <tr><td style="${td}" colspan="4">&nbsp;</td></tr>
@@ -2732,7 +2778,7 @@ function rdrBuildEmailHtml() {
   </tr>
 </table>
 
-</body></html>`;
+</body></html>`);
 }
 
 // .msg (Outlook OLE2/CFB) generation lives in msg-writer.js — see MsgWriter.buildMsg().

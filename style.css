@@ -2237,14 +2237,15 @@ h1 {
    RDR — ATTENDANCE GRID
    ============================================= */
 .att-grids-wrap {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
+  align-items: start;
 }
-.att-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.att-row-sep {
+  grid-column: 1 / -1;
+  height: 0;
+  border-top: 1px solid var(--border);
 }
 .att-grid {
   display: grid;
@@ -2692,7 +2693,7 @@ h1 {
 .turnout-remove-btn {
   width: 24px; height: 24px;
   border: none; background: none;
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: 14px;
   cursor: pointer;
   border-radius: 5px;

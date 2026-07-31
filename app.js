@@ -2763,7 +2763,7 @@ function rdrBuildEmailHtml() {
   </tr>
   <tr>
     <td style="padding:6px 0 0 0">
-      <img src="${rdrSignOffDataUrl||(typeof SIG_BANNER!=='undefined'?SIG_BANNER:'')}" width="100%" style="display:block;width:100%;height:auto">
+      <img src="${rdrSignOffDataUrl||(typeof SIG_BANNER!=='undefined'?SIG_BANNER:'')}" style="display:block">
     </td>
   </tr>
   <tr>
@@ -3053,6 +3053,84 @@ function rdrCircKeydown(e, field) {
 }
 function rdrCircBlur(field) {
   setTimeout(() => el(`rdr-circ-${field}-dropdown`)?.classList.add('hidden'), 150);
+}
+
+// =============================================
+// GLOBAL SETTINGS BACKUP / RESTORE
+// =============================================
+// Every localStorage key the panel persists. Keep in sync when adding a new
+// stored setting, otherwise it silently drops out of user backups.
+function globalSettingsKeys() {
+  return [
+    ROTAS_KEY, ROTAS_TS_KEY,
+    APPLIANCES_KEY, APPLIANCES_TS_KEY,
+    ROTA_PEOPLE_KEY, PEOPLE_KEY,
+    RDR_SK.OPS, RDR_SK.EMS,
+    RDR_REASONS_SK, RDR_RECIP_SK, RDR_SIGNOFF_SK,
+    RDR_CIRC_SK.TO, RDR_CIRC_SK.CC,
+  ];
+}
+
+const GLOBAL_SETTINGS_TAG = 'OPSLOG_SETTINGS_V1';
+
+function exportAllSettings() {
+  const data = {};
+  globalSettingsKeys().forEach(k => {
+    const v = localStorage.getItem(k);
+    if (v !== null) data[k] = v;
+  });
+  const payload = JSON.stringify({ tag: GLOBAL_SETTINGS_TAG, saved: new Date().toISOString(), data });
+
+  navigator.clipboard.writeText(payload).then(() => {
+    showAlert({
+      type: 'success',
+      title: 'Settings Copied',
+      bodyHTML: `${Object.keys(data).length} setting group(s) copied. Paste this into <strong>Quick import all settings</strong> on another machine, or after a reset, to restore everything.`,
+      buttons: [], dismissAnywhere: true, dismissHint: 'Click anywhere to dismiss',
+    });
+  }).catch(() => {
+    prompt('Copy this settings backup manually (Ctrl+C):', payload);
+  });
+}
+
+function importAllSettings() {
+  const ta = el('global-import-text');
+  const raw = (ta?.value || '').trim();
+  if (!raw) { showToast('Nothing to import'); return; }
+
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch {
+    showAlert({ type:'error', title:'Invalid backup',
+      bodyHTML:'That does not look like a settings backup. Copy it again using <strong>Copy All Settings to Clipboard</strong>.',
+      buttons:[{label:'OK'}] });
+    return;
+  }
+  if (!parsed || parsed.tag !== GLOBAL_SETTINGS_TAG || !parsed.data || typeof parsed.data !== 'object') {
+    showAlert({ type:'error', title:'Invalid backup',
+      bodyHTML:'That does not look like a settings backup. Copy it again using <strong>Copy All Settings to Clipboard</strong>.',
+      buttons:[{label:'OK'}] });
+    return;
+  }
+
+  const allowed = globalSettingsKeys();
+  const entries = Object.entries(parsed.data).filter(([k, v]) => allowed.includes(k) && typeof v === 'string');
+  if (!entries.length) { showToast('Backup contained no recognised settings'); return; }
+
+  const when = parsed.saved ? new Date(parsed.saved).toLocaleString() : 'unknown date';
+  showAlert({
+    type: 'info',
+    title: 'Restore all settings?',
+    bodyHTML: `This backup holds ${entries.length} setting group(s) from ${esc(when)}.<br><br>Your current settings will be replaced and the panel will reload.`,
+    buttons: [
+      { label: 'Cancel' },
+      { label: 'Restore', danger: true, cb: () => {
+          allowed.forEach(k => localStorage.removeItem(k));
+          entries.forEach(([k, v]) => localStorage.setItem(k, v));
+          location.reload();
+        } },
+    ],
+  });
 }
 
 function initRdr() {

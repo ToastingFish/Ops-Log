@@ -2573,7 +2573,10 @@ function rdrBuildEmailHtml() {
   const shiftStr  = isAM ? 'AM Shift' : 'PM Shift';
 
   // ── shared style tokens ──────────────────────────────────────────────────
-  const F   = 'font-family:Calibri,Arial,sans-serif;font-size:11pt';
+  // Body copy 16pt, section headers 24pt, title 28pt (sign-off block keeps its
+  // own smaller sizes — see the signature table below).
+  const F   = 'font-family:Calibri,Arial,sans-serif;font-size:16pt';
+  const HSZ = 'font-size:24pt';
   const BDR = 'border:1pt solid #AAAAAA';
   const hd  = `${F};${BDR};background:#0070C0;color:#FFFFFF;font-weight:bold;padding:5px 8px;vertical-align:middle`;
   const hd2 = `${F};${BDR};background:#BDD7EE;color:#1F3864;font-weight:bold;padding:5px 8px;vertical-align:middle`;
@@ -2617,7 +2620,7 @@ function rdrBuildEmailHtml() {
   const pmRLabel = `PM SHIFT${pmRota ? ' ' + pmRota.toUpperCase() : ''}`;
 
   // ── checklist content (static, per reference template) ───────────────────
-  const olS    = 'margin:2px 0 2px 16px;padding:0;font-size:10pt';
+  const olS    = 'margin:2px 0 2px 16px;padding:0;font-size:16pt';
   const clAMwd = `<ol style="${olS}"><li>OPS EQUIPMENT CHECKLIST</li></ol>`;
   const clAMwk = `<ol style="${olS}"><li>OPS EQUIPMENT CHECKLIST</li><li>FCV CHECKLIST (SIGNED)</li></ol>`;
   const clPM   = `<ol style="${olS}"><li>OPS EQUIPMENT CHECKLIST</li><li>FCV CHECKLIST (SIGNED)</li><li><b style="color:#FF0000">FIRE POST AUDIT</b></li></ol>`;
@@ -2652,7 +2655,7 @@ function rdrBuildEmailHtml() {
 
   <!-- TITLE BANNER -->
   <tr>
-    <td style="${hd};font-size:20pt;text-align:center;padding:10px;letter-spacing:1px" colspan="4">RDR REPORT</td>
+    <td style="${hd};font-size:28pt;text-align:center;padding:10px;letter-spacing:1px" colspan="4">RDR REPORT</td>
   </tr>
 
   <!-- DATE / SHIFT -->
@@ -2666,7 +2669,7 @@ function rdrBuildEmailHtml() {
   ${circSection}
 
   <!-- CHECKLIST -->
-  <tr><td style="${hd};text-align:center" colspan="4">CHECKLIST</td></tr>
+  <tr><td style="${hd};${HSZ};text-align:center" colspan="4">CHECKLIST</td></tr>
   <tr>
     <td style="${td};padding:0" colspan="4">
       <table style="${tbl}">
@@ -2676,12 +2679,12 @@ function rdrBuildEmailHtml() {
           <td style="${hd2};text-align:center;width:37.5%">WEEKENDS / PH</td>
         </tr>
         <tr>
-          <td style="${hd2};text-align:center;font-size:10pt">AM SHIFT</td>
+          <td style="${hd2};text-align:center">AM SHIFT</td>
           <td style="${td};vertical-align:top">${clAMwd}</td>
           <td style="${td};vertical-align:top">${clAMwk}</td>
         </tr>
         <tr>
-          <td style="${hd2};text-align:center;font-size:10pt">PM SHIFT</td>
+          <td style="${hd2};text-align:center">PM SHIFT</td>
           <td style="${td};vertical-align:top">${clPM}</td>
           <td style="${td};vertical-align:top">${clPM}</td>
         </tr>
@@ -2690,12 +2693,12 @@ function rdrBuildEmailHtml() {
   </tr>
 
   <!-- KEYPRESS RECORD -->
-  <tr><td style="${hd};text-align:center" colspan="4">KEYPRESS RECORD</td></tr>
-  <tr><td style="${td};color:#FF0000;text-align:center" colspan="4">NO KEYS DRAWN</td></tr>
+  <tr><td style="${hd};${HSZ};text-align:center" colspan="4">KEYPRESS RECORD</td></tr>
+  <tr><td style="${td};${HSZ};color:#FF0000;text-align:center" colspan="4">NO KEYS DRAWN</td></tr>
 
   <!-- ATTENDANCE BANNER -->
   <tr>
-    <td style="${hd};font-size:13pt;text-align:center;padding:8px" colspan="4">OPS BRANCH NSF ATTENDANCE</td>
+    <td style="${hd};${HSZ};text-align:center;padding:8px" colspan="4">OPS BRANCH NSF ATTENDANCE</td>
   </tr>
 
   <!-- AM SHIFT | PM SHIFT (rota people) -->
@@ -2714,14 +2717,14 @@ function rdrBuildEmailHtml() {
 
   <!-- OPS LOG BANNER + EMPTY PASTE ROW -->
   <tr>
-    <td style="${hd};font-size:10pt;padding:6px 8px;text-align:center" colspan="4">
+    <td style="${hd};${HSZ};padding:6px 8px;text-align:center" colspan="4">
       OPS LOG
     </td>
   </tr>
   <tr><td style="${td}" colspan="4">&nbsp;</td></tr>
 
   <!-- FIRE REPORTS -->
-  <tr><td style="${hd};text-align:center" colspan="4">FIRE REPORTS</td></tr>
+  <tr><td style="${hd};${HSZ};text-align:center" colspan="4">FIRE REPORTS</td></tr>
 
   <!-- STN 41–45 -->
   ${['41','42','43','44','45'].map(n =>
@@ -2743,7 +2746,7 @@ function rdrBuildEmailHtml() {
       <img src="${typeof SIG_SEP!=='undefined'?SIG_SEP:''}" width="2" height="80" style="display:block">
     </td>
     <td style="padding:0 0 0 8px;vertical-align:top">
-      <b style="font-size:11pt;color:#0E2841">${esc(icName)}</b><br>
+      <b style="font-size:12pt;color:#0E2841">${esc(icName)}</b><br>
       <span style="font-size:10pt;color:#0E2841">INFOCOMMS OPERATOR <b>(${esc(icRota)})</b></span><br>
       <span style="font-size:10pt;color:#0E2841">Operations Branch | 4<sup>th</sup> SCDF Division</span><br>
       <span style="font-size:10pt;color:#0E2841">DID: 6314 6907 | 6314 6906</span>

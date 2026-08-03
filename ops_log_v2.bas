@@ -1309,7 +1309,7 @@ Private Sub DrawHeader(ByVal ws As Worksheet, ByVal rowNum As Long, ByVal baseCo
         .Merge
         .Value = txt
         .Font.Bold = True
-        .Font.Size = 20
+        .Font.Size = 18
         .Interior.Color = RGB(217, 217, 217)
     End With
 
@@ -1322,7 +1322,7 @@ Private Sub DrawFooter(ByVal ws As Worksheet, ByVal rowNum As Long, ByVal baseCo
         .Merge
         .Value = txt
         .Font.Bold = True
-        .Font.Size = 20
+        .Font.Size = 18
         .Interior.Color = RGB(217, 217, 217)
     End With
 

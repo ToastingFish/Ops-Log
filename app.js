@@ -2623,7 +2623,7 @@ function rdrBuildEmailHtml() {
   const olS    = 'margin:2px 0 2px 16px;padding:0;font-size:16pt';
   const clAMwd = `<ol style="${olS}"><li>OPS EQUIPMENT CHECKLIST</li></ol>`;
   const clAMwk = `<ol style="${olS}"><li>OPS EQUIPMENT CHECKLIST</li><li>FCV CHECKLIST (SIGNED)</li></ol>`;
-  const clPM   = `<ol style="${olS}"><li>OPS EQUIPMENT CHECKLIST</li><li>FCV CHECKLIST (SIGNED)</li><li><b style="color:#FF0000">FIRE POST AUDIT</b></li></ol>`;
+  const clPM   = `<ol style="${olS}"><li>OPS EQUIPMENT CHECKLIST</li><li>FCV CHECKLIST (SIGNED)</li></ol>`;
 
   // ── circulation list display ─────────────────────────────────────────────
   const circNames = rdrGetCircNames();
